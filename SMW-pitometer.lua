@@ -4,9 +4,8 @@
 --##   with focus on pit levels and glitch puzzles.                    ##
 --##     http://tasvideos.org/Bizhawk.html                             ##
 --##                                                                   ##
---##   Based on SMW-BizHawk.lua and SMW-BizHawk.lua                    ##
---##     by BrunoValads & Amaraticando                                 ##
---##   Huge thanks to them for an amazing base to build upon.          ##
+--##   Based on SMW-BizHawk.lua by BrunoValads & Amaraticando          ##
+--##   Huge thanks to them for an amazing base to build on.            ##
 --##     https://github.com/brunovalads/smw-stuff                      ##
 --##     https://github.com/rodamaral/smw-tas/                         ##
 --##                                                                   ##
@@ -99,8 +98,8 @@ config.DEFAULT_OPTIONS = {
   right_gap = (20*10/2)+2,  -- (36 maximum chars of the sprite info)*(10 pixels of BizHawk font width)/(2, the scale)+(2 to make it fit better)
   top_gap = 20,
   bottom_gap = 50,
-  positions_in_hex = true,
-  speeds_in_hex = true,
+  positions_in_hex = false,
+  speeds_in_hex = false,
 }
 
 -- Colour settings
@@ -148,7 +147,7 @@ config.DEFAULT_COLOUR = {
   cape_bg = "#ffd70060",
 
   -- Sprites
-  sprites = {
+  --[[sprites = {
     0xff80FFFF, -- cyan
     0xffA0A0FF, -- blue
     0xffFF6060, -- red
@@ -156,7 +155,8 @@ config.DEFAULT_COLOUR = {
     0xffFFA100, -- orange
     0xffFFFF80, -- yellow
     0xff40FF40  -- green
-  },
+  },]]
+  sprites = {"#00ff00ff", "#0000ffff", "#ffff00ff", "#ff00ffff", "#b00040ff"},
   sprites_interaction_pts = "#ffffffff",
   sprites_bg = "#0000b070",
   sprites_clipping_bg = "#000000a0",
@@ -1855,6 +1855,27 @@ local WRAM = {
   yoshi_slot = 0x18df,
   yoshi_loose_flag = 0x18e2,
   yoshi_overworld_flag = 0x0dc1,
+  
+  -- Misc sprite tables
+  sprite_miscellaneous1 = 0x00c2,
+  sprite_miscellaneous2 = 0x1504,
+  sprite_miscellaneous3 = 0x1510,
+  sprite_miscellaneous4 = 0x151c,
+  sprite_miscellaneous5 = 0x1528,
+  sprite_miscellaneous6 = 0x1534,
+  sprite_miscellaneous7 = 0x1540,
+  sprite_miscellaneous8 = 0x154c,
+  sprite_miscellaneous9 = 0x1558,
+  sprite_miscellaneous10 = 0x1564,
+  sprite_miscellaneous11 = 0x1570,
+  sprite_miscellaneous12 = 0x157c,
+  sprite_miscellaneous13 = 0x1594,
+  sprite_miscellaneous14 = 0x15ac,
+  sprite_miscellaneous15 = 0x1602,
+  sprite_miscellaneous16 = 0x160e,
+  sprite_miscellaneous17 = 0x1626,
+  sprite_miscellaneous18 = 0x163e,
+  sprite_miscellaneous19 = 0x187b,
 
   -- Extended sprites
   extspr_number = 0x170b,
@@ -2969,7 +2990,8 @@ local function show_movie_info()
 
   -- Time
   local str = frame_time(Lastframe_emulated)   -- Shows the latest frame emulated, not the frame being run now
-  draw.alert_text(draw.Buffer_width + draw.Border_right, draw.Buffer_height + draw.Border_bottom, str, COLOUR.text, recording_bg, false, 1.0, 1.0) 
+  --draw.alert_text(draw.Buffer_width + draw.Border_right, draw.Buffer_height + draw.Border_bottom, str, COLOUR.text, recording_bg, false, 1.0, 1.0) 
+  draw.alert_text(256*draw.AR_x, 224*draw.AR_y, str, COLOUR.text, recording_bg, false, 1.0, 1.0)
 end
 
 
@@ -3282,7 +3304,7 @@ local function level_info()
   -- Level main info
   if OPTIONS.display_level_main_info then
     -- Level indexes and type
-    draw.text(x_pos, y_pos, fmt("Translevel(%03X) Level(%03X) %.1s", LM_translevel_number, Level_index, level_type), COLOUR.text, true)
+    draw.text(x_pos, y_pos, fmt("Room(%03X) OWLevel(%03X) %.1s", LM_translevel_number, Level_index, level_type), COLOUR.text, true)
     y_pos = y_pos + BIZHAWK_FONT_HEIGHT
     
     -- Number of screens within the level
@@ -3651,6 +3673,21 @@ local function player()
     local table_y = draw.AR_y*20
     local colour
     
+    -- p-meter and takeoff meter
+    if p_meter == 112 then colour = COLOUR.positive -- max pmeter
+    elseif p_meter >= 106 then colour = "yellow" -- range of pmeter in a 6/5
+    else colour = COLOUR.text end
+    local p_meter_str
+    if OPTIONS.speeds_in_hex then
+      p_meter_str = fmt("%02X", p_meter)
+    else
+      p_meter_str = fmt("%03d", p_meter)
+    end
+    draw.text(table_x, table_y + i*delta_y, fmt("Meter (%s, %02d) %s", string.rep(" ", p_meter_str:len()), take_off, direction))
+    draw.text(table_x + 7*delta_x, table_y + i*delta_y, p_meter_str, colour)
+    draw.text(table_x + 18*delta_x, table_y + i*delta_y, fmt(" %+d", spin_direction), (is_spinning and COLOUR.text) or COLOUR.weak)
+    i = i + 1
+    
     -- Handle dec/hex option for position
     local position_str
     if OPTIONS.positions_in_hex then
@@ -3658,7 +3695,9 @@ local function player()
     else
       --position_str = fmt("Pos (%d.%02d, %d.%02d", x, x_sub*100/256, y, y_sub*100/256)
       --position_str = fmt("Pos (%d.%03d, %d.%03d)", x, x_sub, y, y_sub)
-      position_str = fmt("Pos (%d.%02d, %d.%02d)", x, x_sub/16, y, y_sub/16)
+      --position_str = fmt("Pos (%d.%02d, %d.%02d)", x, x_sub/16, y, y_sub/16)
+      -- pixel in decimal, subpixel in hex
+      position_str = fmt("Pos (%d.%s, %d.%s)", x, x_sub_simple, y, y_sub_simple)
     end
     draw.text(table_x, table_y + i*delta_y, position_str)
     i = i + 1
@@ -3668,15 +3707,14 @@ local function player()
     if OPTIONS.speeds_in_hex then
       x_speed_str = fmt("       %s %s.%02x", luap.signed8hex(x_speed_u, true), luap.signed8hex(x_speed_int, true), x_speed_frac)
       y_speed_str = luap.signed8hex(y_speed_u, true)
+      if math.abs(x_speed) == 49 or math.abs(x_speed) == 51 then colour = COLOUR.positive -- max running and flying speed
+      elseif (math.abs(x_speed) >= 35 and math.abs(x_speed) <= 37) or math.abs(x_speed) >= 47 then colour = "yellow" -- oscillating speeds
+      else colour = COLOUR.text end
+      draw.text(table_x, table_y + i*delta_y, fmt("Speed (   (      ), %s)", y_speed_str))
+      draw.text(table_x, table_y + i*delta_y, x_speed_str, colour)
     else
-      x_speed_str = fmt("       %+.2d %+.2d.%.2d", x_speed, x_speed, x_speed_frac/16)
-      y_speed_str = fmt("%+d", y_speed)
+      draw.text(table_x, table_y + i*delta_y, fmt("Speed (%d.%02.0f, %+d)", x_speed, x_speed_frac*100/256, y_speed))
     end
-    if math.abs(x_speed) == 49 or math.abs(x_speed) == 51 then colour = COLOUR.positive -- max running and flying speed
-    elseif (math.abs(x_speed) >= 35 and math.abs(x_speed) <= 37) or math.abs(x_speed) >= 47 then colour = "yellow" -- oscillating speeds
-    else colour = COLOUR.text end
-    draw.text(table_x, table_y + i*delta_y, fmt("Speed (   (      ), %s)", y_speed_str))
-    draw.text(table_x, table_y + i*delta_y, x_speed_str, colour)
     i = i + 1
     
     if on_water == 0 then -- Mario is not on water, where jumping is tied to swimming (TODO: maybe implement something about this)
@@ -3711,23 +3749,6 @@ local function player()
       draw.text(table_x, table_y + i*delta_y, jump_speed_str)
       i = i + 1
     end
-    
-    if p_meter == 112 then colour = COLOUR.positive -- max pmeter
-    elseif p_meter >= 106 then colour = "yellow" -- range of pmeter in a 6/5
-    else colour = COLOUR.text end
-    local p_meter_str
-    if OPTIONS.speeds_in_hex then
-      p_meter_str = fmt("%02X", p_meter)
-    else
-      p_meter_str = fmt("%d", p_meter)
-    end
-    draw.text(table_x, table_y + i*delta_y, fmt("P-meter (%s)  %s", string.rep(" ", p_meter_str:len()), direction))
-    draw.text(table_x + 9*delta_x, table_y + i*delta_y, p_meter_str, colour)
-    draw.text(table_x + 18*delta_x, table_y + i*delta_y, fmt(" %+d", spin_direction), (is_spinning and COLOUR.text) or COLOUR.weak)
-    i = i + 1
-    
-    draw.text(table_x, table_y + i*delta_y, fmt("Take-off timer (%d)", take_off))
-    i = i + 1
     
     if is_caped then
       local cape_gliding_index = u8(WRAM.cape_gliding_index)
@@ -4305,7 +4326,12 @@ local function draw_sprite_spawn_despawn()
     if y_screen < 224 + OPTIONS.bottom_gap then
       draw.line(-OPTIONS.left_gap, y_screen, 256 + OPTIONS.right_gap, y_screen, COLOUR.weak) -- x positions don't matter
     end
-    local str = string.format("Sprite %s: %04X", is_vertical and "\"death\"" or "death", ydeath)
+    local str = nil
+    if OPTIONS.speeds_in_hex then
+      str = string.format("Sprite %s: %04X", is_vertical and "\"death\"" or "death", ydeath)
+    else
+      str = string.format("Sprite %s: %d", is_vertical and "\"death\"" or "death", ydeath)
+    end
     draw.text(draw.Buffer_middle_x*draw.AR_x, draw.AR_y*y_screen + 2, str, COLOUR.weak, true, false, 0.5)
   end
 
@@ -4831,43 +4857,40 @@ local function sprite_info(id, counter, table_position)
       local correction = floor(3*floor(x_speed/2)/2)
       x_speed_water = string.format("%+.2d=%+.2d", correction - x_speed, correction)
     end
-    local sprite_str = fmt("#%02d %02X (%X %d) %04X.%1x(%s%s) %04X.%1x(%s)",
+    local sprite_str
+    
+    if OPTIONS.positions_in_hex then
+      sprite_str = fmt("#%02d %02X (%X %d) %04X.%1x(%s%s) %04X.%1x(%s)",
             id, number, status, stun, bit.band(x, 0xFFFF), floor(x_sub/16), luap.signed8hex(x_speed_u, true), x_speed_water, bit.band(y, 0xFFFF), floor(y_sub/16), luap.signed8hex(y_speed_u, true)) --  bit.band( , 0xFFFF) to handle negative positions
+    else
+      sprite_str = fmt("#%02d %02X (%X %d) %d.%1x(%+.1d%s) %d.%1x(%+.1d)",
+            id, number, status, stun, x, floor(x_sub/16), x_speed, x_speed_water, y, floor(y_sub/16), y_speed)
+    end
 
     draw.text(draw.Buffer_width + draw.Border_right, table_position + counter*BIZHAWK_FONT_HEIGHT, sprite_str, info_color, true)
   end
   
   -- Miscellaneous sprite table -- TODO
   if OPTIONS.display_misc_sprite_table then
-    --[[
-    -- Font
-    draw.Text_opacity = 0.6
-    local x_mis, y_mis = -draw.Border_left - 2*BIZHAWK_FONT_WIDTH, draw.AR_y*171 + counter*BIZHAWK_FONT_HEIGHT
-    
-    local miscs = {
-      WRAM.sprite_phase, WRAM.sprite_misc_1504, WRAM.sprite_misc_1510, WRAM.sprite_misc_151c, WRAM.sprite_misc_1528,
-      WRAM.sprite_misc_1534, WRAM.sprite_misc_1558, WRAM.sprite_blocked_status, WRAM.sprite_animation_timer,
-      WRAM.sprite_misc_1594, WRAM.sprite_misc_15ac, WRAM.sprite_misc_1602, WRAM.sprite_misc_160e,
-      WRAM.sprite_misc_1626, WRAM.sprite_misc_163e, WRAM.sprite_misc_187b,
-    }
-
-    local text = ""
-    for i = 1, #miscs do
-      text = string.format("%s   %02X", text, u8(miscs[i] + id))
+    local t = OPTIONS.miscellaneous_sprite_table_number
+    local text = "Tab"
+    for num = 1, 19 do
+      text = fmt("%s %3d", text, num) or text
     end
+
+    draw.text(- draw.Border_left, draw.AR_y*144 - BIZHAWK_FONT_HEIGHT, text, COLOUR.weak)
     
-    draw.text(x_mis, y_mis, text, info_color)]]
-  
-    --[[
+
+    local x_mis, y_mis = - draw.Border_left, draw.AR_y*144 + counter*BIZHAWK_FONT_HEIGHT
 
     local t = OPTIONS.miscellaneous_sprite_table_number
     local misc, text = nil, fmt("#%.2d", id)
     for num = 1, 19 do
-      misc = t[num] and u8(WRAM["sprite_miscellaneous" .. num] + id) or false
+      misc = u8(WRAM["sprite_miscellaneous" .. num] + id) or false
       text = misc and fmt("%s %3d", text, misc) or text
     end
 
-    draw.text(x_mis, y_mis, text, info_color)]]
+    draw.text(x_mis, y_mis, text, info_color)
   end
 
   return 1
