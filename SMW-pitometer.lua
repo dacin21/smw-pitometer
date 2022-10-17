@@ -3740,14 +3740,14 @@ local function player()
           jump_speed_A = -96
         end
       end
-      local jump_speed_str
+      --[[local jump_speed_str
       if OPTIONS.speeds_in_hex then
         jump_speed_str = fmt("Jump speed (A:%s, B:%s)", luap.signed8hex(bit.band(jump_speed_A, 0xFF), true), luap.signed8hex(bit.band(jump_speed_B, 0xFF), true))
       else
         jump_speed_str = fmt("Jump speed (A:%+.2d, B:%+.2d)", jump_speed_A, jump_speed_B)
       end
       draw.text(table_x, table_y + i*delta_y, jump_speed_str)
-      i = i + 1
+      i = i + 1]]
     end
     
     if is_caped then
@@ -6041,9 +6041,15 @@ function Options_form.create_window()
   forms.setproperty(Options_form.cheat_item_box, "Enabled", Cheat.allow_cheats)
 
   xform = xform + 62
-  Options_form.item_box_number = forms.dropdown(Options_form.form, Item_box_table, xform, yform + 1, 300, 10)
+  Options_form.item_box_number = forms.dropdown(Options_form.form, Item_box_table, xform, yform + 1, 270, 10)
   forms.setproperty(Options_form.item_box_number, "Enabled", Cheat.allow_cheats)
 
+  -- Free movement cheat
+  xform = xform + 300
+  Options_form.free_movement = forms.checkbox(Options_form.form, "Free-movement", xform, yform)
+  forms.setproperty(Options_form.free_movement, "Checked", Cheat.under_free_move)
+  forms.setproperty(Options_form.free_movement, "Enabled", Cheat.allow_cheats)
+  
   -- Positon cheat
   xform = 4
   yform = yform + 28
@@ -6069,12 +6075,30 @@ function Options_form.create_window()
   forms.setproperty(Options_form.player_y, "Enabled", Cheat.allow_cheats)
   forms.setproperty(Options_form.player_y_sub, "Enabled", Cheat.allow_cheats)
   
-  -- Free movement cheat
+  -- Speed cheat
   xform = xform + 60
-  Options_form.free_movement = forms.checkbox(Options_form.form, "Free movement", xform, yform)
-  forms.setproperty(Options_form.free_movement, "Checked", Cheat.under_free_move)
-  forms.setproperty(Options_form.free_movement, "Enabled", Cheat.allow_cheats)
-  
+  Options_form.cheat_speed = forms.button(Options_form.form, "Speed", function()
+    Cheat.change_address(WRAM.x_speed, "player_x_speed", 1, false, nil, "Enter a valid x speed", "x speed")
+    Cheat.change_address(WRAM.x_subspeed, "player_x_subspeed", 1, true, nil, "Enter a valid x subspeed", "x subspeed")
+    Cheat.change_address(WRAM.y_speed, "player_y_speed", 1, false, nil, "Enter a valid y speed", "speed")
+    Cheat.change_address(WRAM.p_meter, "player_meter", 1, false, nil, "Enter a valid p-meter", "p-meter")
+  end, xform, yform, 60, 24)
+  forms.setproperty(Options_form.cheat_speed, "Enabled", Cheat.allow_cheats)
+
+  yform = yform + 2
+  xform = xform + 62
+  Options_form.player_x_speed = forms.textbox(Options_form.form, "", 32, 16, "UNSIGNED", xform, yform, false, false)
+  xform = xform + 33
+  Options_form.player_x_subspeed = forms.textbox(Options_form.form, "", 28, 16, "HEX", xform, yform, false, false)
+  xform = xform + 34
+  Options_form.player_y_speed = forms.textbox(Options_form.form, "", 32, 16, "UNSIGNED", xform, yform, false, false)
+  xform = xform + 33
+  Options_form.player_meter = forms.textbox(Options_form.form, "", 28, 16, "UNSIGNED", xform, yform, false, false)
+  forms.setproperty(Options_form.player_x_speed, "Enabled", Cheat.allow_cheats)
+  forms.setproperty(Options_form.player_x_subspeed, "Enabled", Cheat.allow_cheats)
+  forms.setproperty(Options_form.player_y_speed, "Enabled", Cheat.allow_cheats)
+  forms.setproperty(Options_form.player_meter, "Enabled", Cheat.allow_cheats)
+
   -- Debug/documentation cheat -- TODO: maybe make official, with: textbox for the address, checkbox for sprite table, dropdown for the slot (if is sprite table)
   xform, yform = 4, yform + 1.5*delta_y                  -- CURRENTLY WORKING ON TONGUE POINTER!!!
   Options_form.cheat_debug = forms.button(Options_form.form, "Tongue", function()
@@ -6089,6 +6113,32 @@ function Options_form.create_window()
   xform = xform + 59
   Options_form.debug_value = forms.textbox(Options_form.form, "", 30, 16, "HEX", xform, yform + 2, false, false)
   forms.setproperty(Options_form.debug_value, "Enabled", Cheat.allow_cheats)
+  
+  -- Tongue slot cheat
+  xform = xform + 59
+  Options_form.cheat_tongue_slot = forms.button(Options_form.form, "Slot", function()
+    if Yoshi_id then
+      Cheat.change_address(WRAM.sprite_misc_160e + Yoshi_id, "tongue_slot_value", 1, true, nil, "Enter a valid integer (00-FF).", "$160E,x")
+    else
+      print("This Tongue Slot cheat only works if there's a slot with Yoshi!")
+    end
+  end, xform, yform, 57, 24)
+  forms.setproperty(Options_form.cheat_tongue_slot, "Enabled", Cheat.allow_cheats)
+
+  xform = xform + 59
+  Options_form.tongue_slot_value = forms.textbox(Options_form.form, "", 30, 16, "HEX", xform, yform + 2, false, false)
+  forms.setproperty(Options_form.tongue_slot_value, "Enabled", Cheat.allow_cheats)
+
+  -- Swallow timer cheat
+  xform = xform + 59
+  Options_form.cheat_swallow_timer = forms.button(Options_form.form, "Swallow", function()
+    Cheat.change_address(WRAM.swallow_timer, "swallow_timer_value", 1, true, nil, "Enter a valid integer (00-FF).", "$15AC")
+  end, xform, yform, 57, 24)
+  forms.setproperty(Options_form.cheat_swallow_timer, "Enabled", Cheat.allow_cheats)
+
+  xform = xform + 59
+  Options_form.swallow_timer_value = forms.textbox(Options_form.form, "", 30, 16, "HEX", xform, yform + 2, false, false)
+  forms.setproperty(Options_form.swallow_timer_value, "Enabled", Cheat.allow_cheats)
   
   forms.addclick(Options_form.allow_cheats, function() -- to enable/disable child options on click
     Cheat.allow_cheats = forms.ischecked(Options_form.allow_cheats) or false
@@ -6114,10 +6164,20 @@ function Options_form.create_window()
     forms.setproperty(Options_form.player_y, "Enabled", Cheat.allow_cheats)
     forms.setproperty(Options_form.player_y_sub, "Enabled", Cheat.allow_cheats)
     
+    forms.setproperty(Options_form.cheat_speed, "Enabled", Cheat.allow_cheats)
+    forms.setproperty(Options_form.player_x_speed, "Enabled", Cheat.allow_cheats)
+    forms.setproperty(Options_form.player_x_subspeed, "Enabled", Cheat.allow_cheats)
+    forms.setproperty(Options_form.player_y_speed, "Enabled", Cheat.allow_cheats)
+    forms.setproperty(Options_form.player_meter, "Enabled", Cheat.allow_cheats)
+    
     forms.setproperty(Options_form.free_movement, "Enabled", Cheat.allow_cheats)
     
     forms.setproperty(Options_form.cheat_debug, "Enabled", Cheat.allow_cheats)
     forms.setproperty(Options_form.debug_value, "Enabled", Cheat.allow_cheats)
+    forms.setproperty(Options_form.cheat_tongue_slot, "Enabled", Cheat.allow_cheats)
+    forms.setproperty(Options_form.tongue_slot_value, "Enabled", Cheat.allow_cheats)
+    forms.setproperty(Options_form.cheat_swallow_timer, "Enabled", Cheat.allow_cheats)
+    forms.setproperty(Options_form.swallow_timer_value, "Enabled", Cheat.allow_cheats)
   end)
   
   --- SCRIPT SETTINGS ---
