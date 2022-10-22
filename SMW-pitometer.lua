@@ -454,6 +454,26 @@ else
   end
 end
 
+function luap.dict_size(dict)
+  size = 0
+  for k,v in pairs(dict) do
+    size = size + 1
+  end
+  return size
+end
+
+function luap.dict_to_list(dict)
+  local list = {}
+  index = 1
+  for k,v in pairs(dict) do
+    list[index] = v
+    index = index + 1
+  end
+  table.sort(list)
+  return list
+end
+  
+
 --&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
 --&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
 -- JSON
@@ -2395,6 +2415,7 @@ SMW.trigonometry = { -- TODO: see if needed
 
 -- Variables used in various functions
 local Cheat = {}  -- family of cheat functions and variables
+local Pittance = {}  -- variables for moving comparison script.
 local Previous = {}
 local User_input = INPUT_KEYNAMES
 local Joypad = {}
@@ -2607,16 +2628,16 @@ local function display_boundaries(x_game, y_game, width, height, camera_x, camer
   local is_small = is_ducking ~= 0 or powerup == 0
   
   -- Left
-  local left_text = OPTIONS.positions_in_hex and fmt("%04X.0", bit.band(width*floor(x_game/width) - 13, 0xFFFF)) or fmt("%d.00", width*floor(x_game/width) - 13)
+  local left_text = OPTIONS.positions_in_hex and fmt("%04X.0", bit.band(width*floor(x_game/width) - 13, 0xFFFF)) or fmt("%d.0", width*floor(x_game/width) - 13)
   draw.text(draw.AR_x*left, draw.AR_y*(top+bottom)/2, left_text, false, false, 1.0, 0.5)
 
   -- Right
-  local right_text = OPTIONS.positions_in_hex and fmt("%04X.f", bit.band(width*floor(x_game/width) + 12, 0xFFFF)) or fmt("%d.15", width*floor(x_game/width) + 12)
+  local right_text = OPTIONS.positions_in_hex and fmt("%04X.f", bit.band(width*floor(x_game/width) + 12, 0xFFFF)) or fmt("%d.f", width*floor(x_game/width) + 12)
   draw.text(draw.AR_x*right, draw.AR_y*(top+bottom)/2, right_text, false, false, 0.0, 0.5)
 
   -- Top
   local value = (Yoshi_riding_flag and y_game - 16) or y_game
-  local top_text = OPTIONS.positions_in_hex and fmt("%04X.0", bit.band(width*floor(value/width) - 32, 0xFFFF)) or fmt("%d.00", width*floor(value/width) - 32)
+  local top_text = OPTIONS.positions_in_hex and fmt("%04X.0", bit.band(width*floor(value/width) - 32, 0xFFFF)) or fmt("%d.0", width*floor(value/width) - 32)
   draw.text(draw.AR_x*(left+right)/2, draw.AR_y*top, top_text, false, false, 0.5, 1.0)
 
   -- Bottom
@@ -2628,7 +2649,7 @@ local function display_boundaries(x_game, y_game, width, height, camera_x, camer
   else
     value = value - 1  -- the 2 remaining cases are equal
   end
-  local bottom_text = OPTIONS.positions_in_hex and fmt("%04X.f", bit.band(value, 0xFFFF)) or fmt("%d.15", value)
+  local bottom_text = OPTIONS.positions_in_hex and fmt("%04X.f", bit.band(value, 0xFFFF)) or fmt("%d.f", value)
   draw.text(draw.AR_x*(left+right)/2, draw.AR_y*bottom, bottom_text, false, false, 0.5, 0.0)
 
   return left, top
@@ -2721,7 +2742,7 @@ local function draw_layer1_tiles(camera_x, camera_y)
 
         -- Draw Map16 id
         if kind and x_mouse == positions[1] and y_mouse == positions[2] then
-          local position_str = fmt(OPTIONS.positions_in_hex and "(%02X, %02X)" or "(%d, %d)", num_x, num_y)
+          local position_str = fmt("(%02X, %02X)", num_x, num_y)
           draw.text(draw.AR_x*(left + 4), draw.AR_y*top - BIZHAWK_FONT_HEIGHT, fmt("Map16 %s, %X%s", position_str, kind, address), true, false, 0.5, 1.0)
         end
       end
@@ -5681,6 +5702,118 @@ end
 
 
 --#############################################################################
+-- PITTANCE SPLITTER --
+Pittance.enabled = false
+Pittance.do_record = false
+Pittance.do_render = false
+Pittance.has_db = false
+Pittance.active_movie_name = nil
+Pittance.movie_list = {""}
+Pittance.movie_A = nil
+Pittance.offset_A = nil
+Pittance.movie_B = nil
+Pittance.offset_B = nil
+
+
+function Pittance.record_frame()
+  local movie_name = Pittance.active_movie_name
+  local frame = emu.framecount()
+
+  local x = s16(WRAM.x)
+  local y = s16(WRAM.y)
+  local powerup = Player_powerup
+  local ducking = u8(WRAM.is_ducking)
+  local yoshi = Yoshi_riding_flag and 1 or 0
+  
+  local A = SQL.writecommand(fmt("UPDATE inputs SET x=%d, y=%d, ducking=%d, powerup=%d, yoshi=%d WHERE movie = '%s' AND frame = %d;", x, y, ducking, powerup, yoshi, movie_name, frame))
+  local B = SQL.writecommand(fmt("INSERT INTO inputs (movie, frame, x, y, ducking, powerup, yoshi) VALUES ('%s', %d, %d, %d, %d, %d, %d);", movie_name, frame, x, y, ducking, powerup, yoshi))
+end
+
+function Pittance.render(movie, offset, color)
+  if (movie == nil or movie == "") or offset == nil then return end
+  local frame = emu.framecount() + offset
+  -- extract data from db
+  local data = SQL.readcommand(fmt("SELECT * FROM inputs WHERE movie = '%s' AND frame = %d;", movie, frame))
+  if not data or data == 'No rows found' then return end
+
+  local x = tonumber(data["x 0"], 10)
+  local y = tonumber(data["y 0"], 10)
+  local is_ducking = tonumber(data["ducking 0"], 10)
+  local powerup = tonumber(data["powerup 0"], 10)
+  local yoshi = tonumber(data["yoshi 0"], 10)
+  -- render similar to player_hitbox(...)
+  -- TODO: refactor to avoid code duplication
+  local x_screen, y_screen = screen_coordinates(x, y, Camera_x, Camera_y)
+  local is_small = is_ducking ~= 0 or powerup == 0
+  local hitbox_type = 2*(Yoshi_riding_flag and 1 or 0) + (is_small and 0 or 1) + 1
+  
+  local hitbox_offsets = SMW.player_hitbox[hitbox_type]
+  local xoff = hitbox_offsets.xoff
+  local yoff = hitbox_offsets.yoff
+  local width = hitbox_offsets.width
+  local height = hitbox_offsets.height
+  if OPTIONS.display_player_hitbox then
+    draw.rectangle(x_screen + xoff, y_screen + yoff, width, height, color, 0)
+  end
+  
+end
+
+function Pittance.init_db()
+  local filename = './db/' .. gameinfo.getromhash() .. '.sql'
+  print(fmt("Loading db: %s", filename))
+  local db = SQL.opendatabase(filename)
+  if not db or db == "unable to open database file" then
+    print("Error: failed to load db.")
+    return
+  end
+  Pittance.has_db = true
+  -- check if table exists
+  local result = SQL.readcommand("SELECT name FROM sqlite_master WHERE type='table' AND name='inputs';")
+  local movies = {}
+  if not result or result == "No rows found" then
+    print("DB or table not found, creating.")
+    SQL.writecommand("CREATE TABLE inputs ( movie text NOT NULL, frame integer NOT NULL, x integer NOT NULL, y integer NOT NULL, ducking integer NOT NULL, powerup integer NOT NULL, yoshi integer NOT NULL );")
+  else
+    -- load basic db stats
+    local num_rows = luap.dict_to_list(SQL.readcommand("SELECT COUNT(movie) FROM inputs;"))[1]
+    movies = luap.dict_to_list(SQL.readcommand("SELECT DISTINCT movie FROM inputs;"))
+    print(fmt("Loaded db with %s rows across %d movies.", num_rows, #movies))
+  end
+  table.insert(movies, 1, "") -- no movie
+  Pittance.movie_list = movies
+  -- recreate form to update with new movie list
+  forms.destroy(Options_form.form)
+  Options_form.create_window()
+end
+
+function Pittance.main()
+  if not Pittance.enabled then return end
+  -- first db loading will recreate the options window,
+  -- so do it asap independent of Game_mode
+  if not Pittance.has_db then
+    Pittance.init_db()
+    return
+  end
+  -- record and draw only make sense while inside the level
+  if SMW.game_mode_fade_to_level > Game_mode or Game_mode > SMW.game_mode_level then return end
+  
+  if Pittance.do_record then
+    if not Pittance.active_movie_name then
+      local movie_path = movie.filename()
+      Pittance.active_movie_name = string.match(movie_path, "\\([^\\]+)$")
+      print(fmt("Movie name: %s", Pittance.active_movie_name))
+    end
+    Pittance.record_frame()
+  end
+  if Pittance.do_render then
+    Pittance.render(Pittance.movie_A, Pittance.offset_A, COLOUR.sprites[2])
+    Pittance.render(Pittance.movie_B, Pittance.offset_B, COLOUR.sprites[3])
+  end
+end
+
+
+
+--#############################################################################
 -- MAIN --
 
 
@@ -5702,7 +5835,7 @@ end
 function Options_form.create_window()
 
   -- Create form
-  local form_width, form_height = 512, 692
+  local form_width, form_height = 512, 762
   Options_form.form = forms.newform(form_width, form_height, "SMW Script Options")
   
   local xform, yform, delta_x, delta_y = 200, 4, 120, 20
@@ -6180,6 +6313,59 @@ function Options_form.create_window()
     forms.setproperty(Options_form.swallow_timer_value, "Enabled", Cheat.allow_cheats)
   end)
   
+  --- PITTANCE SPLITTER ---
+  
+  y_section = yform + 2*delta_y
+  xform, yform = 4, y_section
+  Options_form.enable_pittance = forms.checkbox(Options_form.form, "Pittance splitter", xform + 214, yform)
+  forms.setproperty(Options_form.enable_pittance, "Checked", Pittance.enabled)
+  forms.setproperty(Options_form.enable_pittance, "TextAlign", "TopRight")
+  forms.setproperty(Options_form.enable_pittance, "CheckAlign", "TopRight")
+  forms.setproperty(Options_form.enable_pittance, "AutoSize", true)
+  forms.label(Options_form.form, "------------------------------------------------------------------------------------------  ----------------------------------------------------------------------", xform - 2, yform, form_width, 20)
+  
+  yform = yform + delta_y
+  Options_form.record_pittance = forms.checkbox(Options_form.form, "Record", xform, yform)
+  forms.setproperty(Options_form.record_pittance, "Checked", Pittance.do_record)
+  forms.setproperty(Options_form.record_pittance, "Enabled", Pittance.enabled)
+  
+  xform = xform + 82
+  Options_form.pittance_A = forms.dropdown(Options_form.form, Pittance.movie_list, xform, yform + 1, 270, 10)
+  forms.setproperty(Options_form.pittance_A, "Enabled", Pittance.enabled)
+
+  xform = xform + 275
+  Options_form.offset_A = forms.textbox(Options_form.form, "0", 30, 16, "SIGNED", xform, yform + 2, false, false)
+  forms.setproperty(Options_form.offset_A, "Enabled", Pittance.enabled)
+  
+  
+  xform = 4
+  yform = yform + delta_y
+  Options_form.render_pittance = forms.checkbox(Options_form.form, "Render", xform, yform)
+  forms.setproperty(Options_form.render_pittance, "Checked", Pittance.do_render)
+  forms.setproperty(Options_form.render_pittance, "Enabled", Pittance.enabled)
+  
+  xform = xform + 82
+  Options_form.pittance_B = forms.dropdown(Options_form.form, Pittance.movie_list, xform, yform + 1, 270, 10)
+  forms.setproperty(Options_form.pittance_B, "Enabled", Pittance.enabled)
+
+  xform = xform + 275
+  Options_form.offset_B = forms.textbox(Options_form.form, "0", 30, 16, "SIGNED", xform, yform + 2, false, false)
+  forms.setproperty(Options_form.offset_B, "Enabled", Pittance.enabled)
+  
+  
+  
+  forms.addclick(Options_form.enable_pittance, function() -- to enable/disable child options on click
+    Pittance.enabled = forms.ischecked(Options_form.enable_pittance) or false
+    
+    forms.setproperty(Options_form.record_pittance, "Enabled", Pittance.enabled)
+    forms.setproperty(Options_form.render_pittance, "Enabled", Pittance.enabled)
+    forms.setproperty(Options_form.pittance_A, "Enabled", Pittance.enabled)
+    forms.setproperty(Options_form.pittance_B, "Enabled", Pittance.enabled)
+    forms.setproperty(Options_form.offset_A, "Enabled", Pittance.enabled)
+    forms.setproperty(Options_form.offset_B, "Enabled", Pittance.enabled)
+  end)
+  
+  
   --- SCRIPT SETTINGS ---
   
   xform, yform = 4, yform + 2*delta_y
@@ -6398,6 +6584,13 @@ function Options_form.evaluate_form() -- TODO: ORGANIZE after all the menu chang
   -- Option form's buttons
   Cheat.allow_cheats = forms.ischecked(Options_form.allow_cheats) or false
   Cheat.under_free_move = forms.ischecked(Options_form.free_movement) or false
+  Pittance.enabled = forms.ischecked(Options_form.enable_pittance) or false
+  Pittance.do_record = forms.ischecked(Options_form.record_pittance) or false
+  Pittance.do_render = forms.ischecked(Options_form.render_pittance) or false
+  Pittance.movie_A = forms.gettext(Options_form.pittance_A)
+  Pittance.movie_B = forms.gettext(Options_form.pittance_B)
+  Pittance.offset_A = tonumber(forms.gettext(Options_form.offset_A), 10)
+  Pittance.offset_B = tonumber(forms.gettext(Options_form.offset_B), 10)
   -- Show/hide
   OPTIONS.display_movie_info = forms.ischecked(Options_form.movie_info) or false
   OPTIONS.display_game_info = forms.ischecked(Options_form.game_info) or false
@@ -6590,6 +6783,7 @@ while true do
     
     -- Drawings are allowed now
     scan_smw()
+    Pittance.main() -- draw comparison boxes behind current player
     level_mode()
     overworld_mode()
     show_movie_info()
