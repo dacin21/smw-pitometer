@@ -183,6 +183,7 @@ config.DEFAULT_COLOUR = {
   yoshi_bg = "#00ffff40",
   yoshi_mounted_bg = "#00000000",
   tongue_line = "#ffa000ff",
+  tongue_line_inactive = "#666666ff",
   tongue_bg = "#00000060",
 
   -- Level related
@@ -4998,6 +4999,7 @@ local function yoshi()
     local yoshi_in_pipe = u8(WRAM.yoshi_in_pipe)
     local wings_timer = u8(WRAM.cape_fall)
     local has_wings = u8(0x1410) == 0x02
+    local yoshi_offscreen = Sprites_info[yoshi_id].x_offscreen ~= 0 or Sprites_info[yoshi_id].y_offscreen
 
     local eat_type_str = eat_id == SMW.null_sprite_id and "-" or string.format("%02X", eat_type)
     local eat_id_str = eat_id == SMW.null_sprite_id and "-" or string.format("#%02d", eat_id)
@@ -5032,7 +5034,9 @@ local function yoshi()
     if tongue_wait ~= 0 or tongue_out ~=0 or tongue_height == 0x89 then  -- if tongue is out or appearing
       -- Color
       local tongue_line
-      if tongue_wait <= 9 then
+      if yoshi_offscreen ~= 0 then
+        tongue_line = COLOUR.tongue_line_inactive
+      elseif tongue_wait <= 9 then
         tongue_line = COLOUR.tongue_line
       else tongue_line = COLOUR.tongue_bg
       end
@@ -5057,6 +5061,23 @@ local function yoshi()
 
         draw.text(x_text, y_text + 3*h, fmt("$1a: %.4x $1c: %.4x", u16(WRAM.layer1_x_mirror), u16(WRAM.layer1_y_mirror)), COLOUR.yoshi)
         draw.text(x_text, y_text + 4*h, fmt("$4d: %.4x $4f: %.4x", u16(WRAM.layer1_VRAM_left_up), u16(WRAM.layer1_VRAM_right_down)), COLOUR.yoshi)
+      end
+      -- glitched hitbox for offscreen yoshi
+      if yoshi_offscreen ~= 0 then
+        -- a weird way of detecting wether tiles were uploaded to VRAM, but seems to work ok.
+        local tongue_is_long = u8(0x18187)
+        -- short tongue
+        local xoff_os = special_sprite_property.yoshi_tongue_offset(0x00, tongue_len) + 1
+        local yoff_os = tile_index + 2
+        local colour_os = tongue_is_long ~= 0 and COLOUR.tongue_line_inactive or COLOUR.tongue_line
+        draw.rectangle(x_screen + xoff_os, y_screen + yoff_os, 8, 4, colour_os, 0x40000000)
+        -- long tongue
+        local level_mode = u8(WRAM.level_mode_settings)
+        local clobbered_0d = memory.read_u8(0x3E28 + 2*level_mode, ROM_domain)
+        xoff_os = special_sprite_property.yoshi_tongue_offset(clobbered_0d, tongue_len)
+        yoff_os = tile_index + 2
+        colour_os = tongue_is_long ~= 0 and COLOUR.tongue_line or COLOUR.tongue_line_inactive
+        draw.rectangle(x_screen + xoff_os, y_screen + yoff_os, 8, 4, colour_os, 0x40000000)
       end
 
       -- tongue out: time predictor
