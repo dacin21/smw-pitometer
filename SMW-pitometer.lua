@@ -3210,12 +3210,15 @@ local function sprite_level_info()
   -- Sprite data enviroment
   local pointer = Sprite_data_pointer
   
-  -- Convert pointer from SNES address to PC address (to use ROM_domain instead of "System Bus") -- TODO: maybe make a function for this, if this conversion become necessary in other instances
-  local pointer_pc, pointer_pc_bank, pointer_pc_addr
-  pointer_pc_bank = floor(pointer/0x20000)
-  pointer_pc_addr = bit.band(pointer, 0xFFFF) - 0x8000*(floor(pointer/0x10000)+1)%2
-  pointer_pc = pointer_pc_bank*0x10000 + pointer_pc_addr  
-  -- TODO: check if there's any hack that is HiROM, because conversion there is different thus this method will not work
+  --[[
+    This doesn't seem to work 
+      -- Convert pointer from SNES address to PC address (to use ROM_domain instead of "System Bus") -- TODO: maybe make a function for this, if this conversion become necessary in other instances
+      local pointer_pc, pointer_pc_bank, pointer_pc_addr
+      pointer_pc_bank = floor(pointer/0x20000)
+      pointer_pc_addr = bit.band(pointer, 0xFFFF) - 0x8000*(floor(pointer/0x10000)+1)%2
+      pointer_pc = pointer_pc_bank*0x10000 + pointer_pc_addr  
+      -- TODO: check if there's any hack that is HiROM, because conversion there is different thus this method will not work
+  ]]--
   
   -- Level scan
   local is_vertical = read_screens() == "Vertical"
@@ -3223,10 +3226,10 @@ local function sprite_level_info()
   local sprite_counter = 0
   for id = 0, 0x80 - 1 do
     -- Sprite data
-    local byte_1 = memory.readbyte(pointer_pc + 1 + id*3, ROM_domain)
+    local byte_1 = memory.readbyte(pointer + 1 + id*3, "System Bus")
     if byte_1==0xff then break end -- end of sprite data for this level
-    local byte_2 = memory.readbyte(pointer_pc + 2 + id*3, ROM_domain)
-    local byte_3 = memory.readbyte(pointer_pc + 3 + id*3, ROM_domain)
+    local byte_2 = memory.readbyte(pointer + 2 + id*3, "System Bus")
+    local byte_3 = memory.readbyte(pointer + 3 + id*3, "System Bus")
 
     local sxpos, sypos
     if is_vertical then -- vertical
