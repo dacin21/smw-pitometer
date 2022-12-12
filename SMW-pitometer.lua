@@ -142,6 +142,8 @@ config.DEFAULT_COLOUR = {
   interaction_bg = "#00000020",
   interaction_nohitbox = "#000000a0",
   interaction_nohitbox_bg = "#00000070",
+  interaction_slope = "#00bb00ff",
+  interaction_slope_prev = "#ff00ffff",
   mario_oam_hitbox = "#00ff80ff",
   cape = "#ffd700ff",
   cape_bg = "#ffd70060",
@@ -189,6 +191,7 @@ config.DEFAULT_COLOUR = {
   -- Level related
   block = "#00008bff",
   blank_tile = "#ffffff70",
+  slope_tile = "#ffcc00a0",
   block_bg = "#22cc88a0",
   layer2_line = "#ff2060ff",
   layer2_bg = "#ff206040",
@@ -2672,6 +2675,18 @@ local function read_screens()
   return level_type, screens_number, hscreen_current, hscreen_number, vscreen_current, vscreen_number
 end
 
+act_as_cache = {}
+
+local function resolve_act_as(kind)
+  for it=0,99 do
+    -- I'm not 100% sure if the act as table is always at 0x88000, but this seems to work.
+    local act = act_as_cache[kind] or u16(0x88000 + 2*kind, ROM_domain)
+    act_as_cache[kind] = act
+    if act == kind then break end
+    kind = act
+  end
+  return kind
+end
 
 local function get_map16_value(x_game, y_game)
   local num_x = floor(x_game/16)
@@ -2704,9 +2719,24 @@ local function get_map16_value(x_game, y_game)
     kind = 256*u8(0x1c800 + num_id) + u8(0xc800 + num_id)
   end
 
-  if kind then return  num_x, num_y, kind, address end
+  if kind then
+    act_as = resolve_act_as(kind)
+    return  num_x, num_y, kind, act_as, address
+  end
 end
 
+
+local function draw_slope_tile(kind, left, top)
+  local slope_pointer = u24(0x82) + kind - 0x16E
+  -- print(fmt("%04X -> %04X -> %04X", kind, slope_pointer, u8(slope_pointer)))
+  for x = 0,15 do
+    local index = u8(slope_pointer, "System Bus")*16 + x
+    -- print(fmt("%04X %04X", x, index))
+    local y = u8(0xe632 + index, "System Bus")
+    draw.line(left+x, top+y, left+x, top+y+10, COLOUR.slope_tile)
+  end
+
+end
 
 local function draw_layer1_tiles(camera_x, camera_y)
   local x_origin, y_origin = screen_coordinates(0, 0, camera_x, camera_y)
@@ -2729,13 +2759,16 @@ local function draw_layer1_tiles(camera_x, camera_y)
 
       -- Drawings
       draw.Text_opacity = 0.6
-      local num_x, num_y, kind, address = get_map16_value(x_game, y_game)
+      local num_x, num_y, kind, act_as, address = get_map16_value(x_game, y_game)
       if kind then
-        if kind >= 0x111 and kind <= 0x16d or kind == 0x2b then
+        if act_as >= 0x111 and act_as <= 0x16d or act_as == 0x2b then
           -- default solid blocks, don't know how to include custom blocks
           draw.rectangle(left + push_direction, top, 8, 15, 0, COLOUR.block_bg)
         end
-        draw.rectangle(left, top, 15, 15, kind == SMW.blank_tile_map16 and COLOUR.blank_tile or COLOUR.block, 0)
+        draw.rectangle(left, top, 15, 15, act_as == SMW.blank_tile_map16 and COLOUR.blank_tile or COLOUR.block, 0)
+        if act_as >= 0x16e and act_as <= 0x1D7 then
+          draw_slope_tile(act_as, left, top)
+        end
 
         if Layer1_tiles[number][3] then
           display_boundaries(x_game, y_game, 16, 16, camera_x, camera_y)  -- the text around it
@@ -2744,7 +2777,7 @@ local function draw_layer1_tiles(camera_x, camera_y)
         -- Draw Map16 id
         if kind and x_mouse == positions[1] and y_mouse == positions[2] then
           local position_str = fmt("(%02X, %02X)", num_x, num_y)
-          draw.text(draw.AR_x*(left + 4), draw.AR_y*top - BIZHAWK_FONT_HEIGHT, fmt("Map16 %s, %X%s", position_str, kind, address), true, false, 0.5, 1.0)
+          draw.text(draw.AR_x*(left + 4), draw.AR_y*top - BIZHAWK_FONT_HEIGHT, fmt("Map16 %s, %X->%X%s", position_str, kind, act_as, address), true, false, 0.5, 1.0)
         end
       end
 
@@ -3036,7 +3069,7 @@ local function show_game_info()
     if OPTIONS.positions_in_hex then
       cam_str = fmt("Camera (%04X, %04X)", Camera_x, Camera_y)
     else
-      cam_str = fmt("Camera (%d, %d)", Camera_x, Camera_y)
+      cam_str = fmt("Camera (%d, %d) = (%04X, %04X)", Camera_x, Camera_y, Camera_x, Camera_y)
     end
     local x_cam_txt = draw.text(draw.Buffer_middle_x*draw.AR_x, 0, cam_str, COLOUR.text, true, false, 0.5)
     
@@ -3440,7 +3473,8 @@ local function player_hitbox(x, y, is_ducking, powerup, transparency_level)
   local interaction_nohitbox = is_transparent and COLOUR.interaction_nohitbox or draw.change_transparency(COLOUR.interaction_nohitbox, transparency_level)
   local interaction_nohitbox_bg = is_transparent and COLOUR.interaction_nohitbox_bg or 0
   local interaction = is_transparent and COLOUR.interaction or draw.change_transparency(COLOUR.interaction, transparency_level)
-
+  local interaction_slope = is_transparent and COLOUR.interaction_slope or draw.change_transparency(COLOUR.interaction_slope, transparency_level)
+  
   -- Interaction points, offsets and dimensions
   local y_points_offsets = SMW.y_interaction_points[hitbox_type]
   local left_side = SMW.x_interaction_points.left_side
@@ -3481,6 +3515,7 @@ local function player_hitbox(x, y, is_ducking, powerup, transparency_level)
     draw.line(x_screen + left_side, y_screen + side, x_screen + left_foot, y_screen + side, interaction)  -- left side
     draw.line(x_screen + right_side, y_screen + side, x_screen + right_foot, y_screen + side, interaction)  -- right side
     draw.line(x_screen + left_foot, y_screen + foot - 2, x_screen + left_foot, y_screen + foot, interaction)  -- left foot bottom
+    draw.pixel(x_screen + x_center, y_screen + foot, interaction_slope)  -- used for slopes, not an actual interaction point
     draw.line(x_screen + right_foot, y_screen + foot - 2, x_screen + right_foot, y_screen + foot, interaction)  -- right foot bottom
     draw.line(x_screen + left_side, y_screen + shoulder, x_screen + left_side + 2, y_screen + shoulder, interaction)  -- head left point
     draw.line(x_screen + right_side - 2, y_screen + shoulder, x_screen + right_side, y_screen + shoulder, interaction)  -- head right point
@@ -5729,7 +5764,7 @@ end
 -- PITTANCE SPLITTER --
 Pittance.enabled = false
 Pittance.do_record = false
-Pittance.do_render = false
+Pittance.do_render = true
 Pittance.has_db = false
 Pittance.active_movie_name = nil
 Pittance.movie_list = {""}
@@ -5765,11 +5800,12 @@ function Pittance.render(movie, offset, color)
   local is_ducking = tonumber(data["ducking 0"], 10)
   local powerup = tonumber(data["powerup 0"], 10)
   local yoshi = tonumber(data["yoshi 0"], 10)
+
   -- render similar to player_hitbox(...)
   -- TODO: refactor to avoid code duplication
   local x_screen, y_screen = screen_coordinates(x, y, Camera_x, Camera_y)
   local is_small = is_ducking ~= 0 or powerup == 0
-  local hitbox_type = 2*(Yoshi_riding_flag and 1 or 0) + (is_small and 0 or 1) + 1
+  local hitbox_type = 2*(yoshi) + (is_small and 0 or 1) + 1
   
   local hitbox_offsets = SMW.player_hitbox[hitbox_type]
   local xoff = hitbox_offsets.xoff
@@ -5836,6 +5872,65 @@ function Pittance.main()
 end
 
 
+
+--#############################################################################
+-- REWIND COUNTING --
+
+--[[
+This script includes rewind blocks as a single rerecord.
+A rewind block is characterized by the frame counter decreasing without the
+player having loaded a savestate. A rewind block ends if the player loads a
+savestate or the frame counter increases again. Rerecords are not increased
+when the movie is in "play" mode (this is consistent with loadstate behaviour)
+
+Big thanks to xHF01x for writing this!
+]]
+Rewinds = {}
+
+function Rewinds.init()
+    Rewinds.rewinding = false
+    Rewinds.tastudio_has_recorded = false
+    Rewinds.loaded_state = false
+    Rewinds.current_frame = emu.framecount()
+    
+    event.onloadstate(function()
+        Rewinds.loaded_state = true
+        Rewinds.rewinding = false
+    end)
+end
+
+function Rewinds.add_one()
+    movie.setrerecordcount(movie.getrerecordcount()+1)
+end
+
+function Rewinds.main()
+    Rewinds.prev_frame, Rewinds.current_frame = Rewinds.current_frame, emu.framecount()
+
+    if (Rewinds.current_frame < Rewinds.prev_frame) then
+        if ((not Rewinds.rewinding) and (not Rewinds.loaded_state) and movie.isloaded()
+            and movie.getrerecordcounting() and (movie.mode()~="PLAY")) then
+            Rewinds.add_one()
+        end
+        Rewinds.rewinding = true
+        Rewinds.tastudio_has_recorded = false
+    elseif (Rewinds.current_frame > Rewinds.prev_frame) then
+        Rewinds.rewinding = false
+    end
+    Rewinds.loaded_state = false
+    
+    
+    if tastudio.engaged() then
+        if (tastudio.getrecording() and (not Rewinds.tastudio_has_recorded)) then
+            Rewinds.add_one()
+            Rewinds.tastudio_has_recorded = true
+        elseif (not tastudio.getrecording()) then
+            -- if you rewind in tastudio, it will frame advance (to not show a black screen), which will enter this branch (and which skips the above logic)
+            Rewinds.tastudio_has_recorded = false
+        end
+    end
+end
+
+Rewinds.init()
 
 --#############################################################################
 -- MAIN --
@@ -6507,7 +6602,7 @@ function Sprite_tables_form.create_window()
   if not Sprite_tables_form.is_form_closed then return end
 
   -- Create sprite tables form
-  local default_width, default_height = 700, 476
+  local default_width, default_height = 900, 476
   if Sprite_tables_form.width == nil and Sprite_tables_form.height == nil then
     Sprite_tables_form.width, Sprite_tables_form.height = default_width, default_height
   end
@@ -6856,6 +6951,8 @@ while true do
 
   -- Frame advance: don't use emu.yield() righ now, as the drawings aren't erased correctly
   emu.frameadvance()
+
+  Rewinds.main() -- Down here as we need emu.frameadvance() between init and run.
 end
 
 
