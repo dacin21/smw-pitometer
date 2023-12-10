@@ -46,6 +46,7 @@ config.DEFAULT_OPTIONS = {
   display_sprite_vs_sprite_hitbox = false,
   display_debug_sprite_tweakers = false,
   display_debug_sprite_extra = false,
+  use_pixi_status_table = false,
   display_other_sprites_info = true,
   display_extended_sprite_info = true,
   display_extended_sprite_hitbox = true,
@@ -1875,6 +1876,7 @@ local WRAM = {
   sprite_yoshi_squatting = 0x18af,
   sprite_buoyancy = 0x190e,
   sprite_load_status_table = 0x1938, -- 128 bytes
+  sprite_load_status_table_pixi = 0x1af00, -- 128 bytes
   bowser_attack_timers = 0x14b0, -- 9 bytes
   yoshi_slot = 0x18df,
   yoshi_loose_flag = 0x18e2,
@@ -3233,7 +3235,9 @@ local function sprite_level_info()
       indexes[index] = true
     end
   end
-  local status_table = memory.readbyterange(WRAM.sprite_load_status_table, 0x80)
+  -- Note from SMWC: Pixi may move this table to $7FAF00 in order to expand the table to 256 bytes, if the !Disable255SpritesPerLevel configuration flag is turned off.
+  local status_table_address = OPTIONS.use_pixi_status_table and WRAM.sprite_load_status_table_pixi or WRAM.sprite_load_status_table
+  local status_table = memory.readbyterange(status_table_address, 0x80)
 
   local x_origin = 0
   local y_origin = OPTIONS.top_gap + draw.Buffer_height - 4*11
@@ -3981,6 +3985,7 @@ local function extended_sprites()
 end
 
 
+local cluster_sprite_warning_cooldown = 0
 local function cluster_sprites()
   if not OPTIONS.display_other_sprites_info or not OPTIONS.display_cluster_sprite_info or u8(WRAM.cluspr_flag) == 0 then return end
 
@@ -3997,7 +4002,11 @@ local function cluster_sprites()
 
     if clusterspr_number ~= 0 then
       if not SMW.hitbox_cluster_sprite[clusterspr_number] then
-        print("Warning: wrong cluster sprite number:", clusterspr_number)  -- should not happen without cheats
+        cluster_sprite_warning_cooldown = cluster_sprite_warning_cooldown - 1
+        if cluster_sprite_warning_cooldown <= 0 then
+          print("Warning: wrong cluster sprite number:", clusterspr_number)  -- should not happen without cheats
+          cluster_sprite_warning_cooldown = 60
+        end
         return
       end
 
@@ -4402,6 +4411,7 @@ local function draw_sprite_spawn_despawn()
     draw.line(-left_line, -OPTIONS.top_gap, -left_line, 224 + OPTIONS.bottom_gap, COLOUR.weak)
     draw.line(-left_line + 15, -OPTIONS.top_gap, -left_line + 15, 224 + OPTIONS.bottom_gap, COLOUR.very_weak)
 
+    draw.line(256 + right_line + 32, -OPTIONS.top_gap, 256 + right_line + 32, 224 + OPTIONS.bottom_gap, COLOUR.very_weak)
     draw.line(256 + right_line, -OPTIONS.top_gap, 256 + right_line, 224 + OPTIONS.bottom_gap, COLOUR.weak)
     draw.line(256 + right_line - 15, -OPTIONS.top_gap, 256 + right_line - 15, 224 + OPTIONS.bottom_gap, COLOUR.very_weak)
     
@@ -4478,11 +4488,12 @@ special_sprite_property[0x1e] = function(slot) -- Lakitu
   if u8(WRAM.sprite_misc_151c + slot) ~= 0 or
   u8(WRAM.sprite_horizontal_direction + slot) ~= 0 then
 
-    local OAM_index = 0xec
+    local OAM_index = 0x3C -- 0xec in vanilla?
     local xoff = u8(0x304 + OAM_index) - 0x0c -- lots of unlisted WRAM
     local yoff = u8(0x305 + OAM_index) - 0x0c
     local width, height = 0x18 - 1, 0x18 - 1  -- instruction BCS
 
+    print(xoff, yoff, width, height, COLOUR.awkward_hitbox, COLOUR.awkward_hitbox_bg)
     draw.rectangle(xoff, yoff, width, height, COLOUR.awkward_hitbox, COLOUR.awkward_hitbox_bg)
     -- TODO: 0x7e and 0x80 are too important
     -- draw this point outside this function and add an option
@@ -6109,6 +6120,11 @@ function Options_form.create_window()
   Options_form.debug_sprite_extra = forms.checkbox(Options_form.form, "Extra info", xform, yform)
   forms.setproperty(Options_form.debug_sprite_extra, "Checked", OPTIONS.display_debug_sprite_extra)
   forms.setproperty(Options_form.debug_sprite_extra, "Enabled", OPTIONS.display_sprite_info)
+
+  yform = yform + delta_y
+  Options_form.debug_sprite_status_pixi = forms.checkbox(Options_form.form, "Pixi status table", xform, yform)
+  forms.setproperty(Options_form.debug_sprite_status_pixi, "Checked", OPTIONS.use_pixi_status_table)
+  forms.setproperty(Options_form.debug_sprite_status_pixi, "Enabled", OPTIONS.display_sprite_info)
   
   forms.addclick(Options_form.sprite_info, function() -- to enable/disable child options on click
     OPTIONS.display_sprite_info = forms.ischecked(Options_form.sprite_info) or false
@@ -6121,6 +6137,7 @@ function Options_form.create_window()
     forms.setproperty(Options_form.sprite_tables_button, "Enabled", OPTIONS.display_sprite_info)
     forms.setproperty(Options_form.debug_sprite_tweakers, "Enabled", OPTIONS.display_sprite_info)
     forms.setproperty(Options_form.debug_sprite_extra, "Enabled", OPTIONS.display_sprite_info)
+    forms.setproperty(Options_form.debug_sprite_status_pixi, "Enabled", OPTIONS.display_sprite_info)
   end)
   
   if yform > y_bigger then y_bigger = yform end
@@ -6602,7 +6619,7 @@ function Sprite_tables_form.create_window()
   if not Sprite_tables_form.is_form_closed then return end
 
   -- Create sprite tables form
-  local default_width, default_height = 900, 476
+  local default_width, default_height = 1080, 476
   if Sprite_tables_form.width == nil and Sprite_tables_form.height == nil then
     Sprite_tables_form.width, Sprite_tables_form.height = default_width, default_height
   end
@@ -6692,7 +6709,7 @@ function Sprite_tables_form.create_window()
   yform = yform + 1.5*delta_y
   --xform, yform = 498, 302
   
-  Sprite_tables_form.description = forms.textbox(Sprite_tables_form.form, "", Sprite_tables_form.width - xform - 20, Sprite_tables_form.height - yform - 44, "", xform, yform, true, false, "Vertical")
+  Sprite_tables_form.description = forms.textbox(Sprite_tables_form.form, "", Sprite_tables_form.width - xform - 280, Sprite_tables_form.height - yform - 44, "", xform, yform, true, false, "Vertical")
   forms.setproperty(Sprite_tables_form.description, "ReadOnly", true)
   
   Sprite_tables_form.is_form_closed = false
@@ -6743,6 +6760,7 @@ function Options_form.evaluate_form() -- TODO: ORGANIZE after all the menu chang
   -- Debug/Extra
   OPTIONS.display_debug_player_extra = forms.ischecked(Options_form.debug_player_extra) or false
   OPTIONS.display_debug_sprite_extra = forms.ischecked(Options_form.debug_sprite_extra) or false
+  OPTIONS.use_pixi_status_table = forms.ischecked(Options_form.debug_sprite_status_pixi) or false
   OPTIONS.display_debug_sprite_tweakers = forms.ischecked(Options_form.debug_sprite_tweakers) or false
   OPTIONS.display_debug_extended_sprite = forms.ischecked(Options_form.debug_extended_sprite) or false
   OPTIONS.display_debug_cluster_sprite = forms.ischecked(Options_form.debug_cluster_sprite) or false
