@@ -1724,278 +1724,291 @@ if not IS_SMW then error("\n\nThis script is only for Super Mario World (any SNE
 local HAS_SA1 = false
 if biz.map_mode_rom_type == 0x2334 or biz.map_mode_rom_type == 0x2335 then HAS_SA1 = true end -- TODO: RAM ramaps https://github.com/VitorVilela7/SA1-Pack/blob/master/docs/remap.asm
 
+-- Memory wrapper for easy SA-1 support
+local function mem(memory_function, location, offset)
+  offset = offset == nil and 0 or offset
+  return memory_function(location.address + offset, location.domain)
+end
+
+local function remap(reg_address, reg_domain, sa1_address, sa1_domain)
+  if HAS_SA1 then
+    return { address = sa1_address, domain = sa1_domain }
+  else
+    return {address = reg_address, domain = reg_domain }
+  end
+end
+
 
 --#############################################################################
 -- SMW ADDRESSES AND CONSTANTS
-
 local WRAM = {
   -- I/O
-  ctrl_1_1 = 0x0015,
-  ctrl_1_2 = 0x0017,
-  firstctrl_1_1 = 0x0016,
-  firstctrl_1_2 = 0x0018,
+  ctrl_1_1 = remap(0x0015, "WRAM", 0x0015, "SA1_IRAM"),
+  ctrl_1_2 = remap(0x0017, "WRAM", 0x0017, "SA1_IRAM"),
+  firstctrl_1_1 = remap(0x0016, "WRAM", 0x0016, "SA1_IRAM"),
+  firstctrl_1_2 = remap(0x0018, "WRAM", 0x0018, "SA1_IRAM"),
 
   -- General
-  game_mode = 0x0100,
-  real_frame = 0x0013,
-  effective_frame = 0x0014,
-  lag_indicator = 0x01fe,
-  timer_frame_counter = 0x0f30,
-  RNG = 0x148d,
-  RNG_input = 0x148b,
-  timer = 0x0F31, -- 3 bytes, one for each digit
-  sprite_data_pointer = 0x00CE, -- 3 bytes
-  layer1_data_pointer = 0x0065, -- 3 bytes
-  layer2_data_pointer = 0x0068, -- 3 bytes
-  sprite_memory_header = 0x1692,
-  lock_animation_flag = 0x009d, -- Most codes will still run if this is set, but almost nothing will move or animate.
-  level_mode_settings = 0x1925,
-  star_road_speed = 0x1df7,
-  star_road_timer = 0x1df8,
-  current_character = 0x0db3, -- #00 = Mario, #01 = Luigi
-  exit_counter = 0x1F2E,
-  event_flags = 0x1F02, -- 15 bytes (1 bit per exit)
-  current_submap = 0x1F11,
-  OW_tile_translevel = 0xD000, -- 0x800 bytes table
-  OW_action_pointer = 0x13D9,
-  OW_player_animation = 0x1F13, -- 2 bytes for Mario, 2 bytes for Luigi
+  game_mode = remap(0x0100, "WRAM", 0x0100, ""),
+  real_frame = remap(0x0013, "WRAM", 0x0013, ""),
+  effective_frame = remap(0x0014, "WRAM", 0x0014, ""),
+  lag_indicator = remap(0x01fe, "WRAM", 0x01fe, ""),
+  timer_frame_counter = remap(0x0f30, "WRAM", 0x0f30, ""),
+  RNG = remap(0x148d, "WRAM", 0x148d, ""),
+  RNG_input = remap(0x148b, "WRAM", 0x148b, ""),
+  timer = remap(0x0F31, "WRAM", 0x0F31, ""), -- 3 bytes, one for each digit
+  sprite_data_pointer = remap(0x00CE, "WRAM", 0x00CE, ""), -- 3 bytes
+  layer1_data_pointer = remap(0x0065, "WRAM", 0x0065, ""), -- 3 bytes
+  layer2_data_pointer = remap(0x0068, "WRAM", 0x0068, ""), -- 3 bytes
+  sprite_memory_header = remap(0x1692, "WRAM", 0x1692, ""),
+  lock_animation_flag = remap(0x009d, "WRAM", 0x009d, ""), -- Most codes will still run if this is set, but almost nothing will move or animate.
+  level_mode_settings = remap(0x1925, "WRAM", 0x1925, ""),
+  star_road_speed = remap(0x1df7, "WRAM", 0x1df7, ""),
+  star_road_timer = remap(0x1df8, "WRAM", 0x1df8, ""),
+  current_character = remap(0x0db3, "WRAM", 0x0db3, ""), -- #00 = Mario, #01 = Luigi
+  exit_counter = remap(0x1F2E, "WRAM", 0x1F2E, ""),
+  event_flags = remap(0x1F02, "WRAM", 0x1F02, ""), -- 15 bytes (1 bit per exit)
+  current_submap = remap(0x1F11, "WRAM", 0x1F11, ""),
+  OW_tile_translevel = remap(0xD000, "WRAM", 0xD000, ""), -- 0x800 bytes table
+  OW_action_pointer = remap(0x13D9, "WRAM", 0x13D9, ""),
+  OW_player_animation = remap(0x1F13, "WRAM", 0x1F13, ""), -- 2 bytes for Mario, 2 bytes for Luigi
 
   -- Camera
-  layer1_x_mirror = 0x001a,
-  layer1_y_mirror = 0x001c,
-  layer1_VRAM_left_up = 0x004d,
-  layer1_VRAM_right_down = 0x004f,
-  camera_x = 0x1462,
-  camera_y = 0x1464,
-  camera_left_limit = 0x142c,
-  camera_right_limit = 0x142e,
-  screen_mode = 0x005B,
-  screens_number = 0x005d,
-  hscreen_number = 0x005e,
-  vscreen_number = 0x005f,
-  vertical_scroll_flag_header = 0x1412,  -- #$00 = Disable; #$01 = Enable; #$02 = Enable if flying/climbing/etc.
-  vertical_scroll_enabled = 0x13f1,
-  camera_scroll_timer = 0x1401,
+  layer1_x_mirror = remap(0x001a, "WRAM", 0x001a, ""),
+  layer1_y_mirror = remap(0x001c, "WRAM", 0x001c, ""),
+  layer1_VRAM_left_up = remap(0x004d, "WRAM", 0x004d, ""),
+  layer1_VRAM_right_down = remap(0x004f, "WRAM", 0x004f, ""),
+  camera_x = remap(0x1462, "WRAM", 0x1462, ""),
+  camera_y = remap(0x1464, "WRAM", 0x1464, ""),
+  camera_left_limit = remap(0x142c, "WRAM", 0x142c, ""),
+  camera_right_limit = remap(0x142e, "WRAM", 0x142e, ""),
+  screen_mode = remap(0x005B, "WRAM", 0x005B, ""),
+  screens_number = remap(0x005d, "WRAM", 0x005d, ""),
+  hscreen_number = remap(0x005e, "WRAM", 0x005e, ""),
+  vscreen_number = remap(0x005f, "WRAM", 0x005f, ""),
+  vertical_scroll_flag_header = remap(0x1412, "WRAM", 0x1412, ""),  -- #$00 = Disable; #$01 = Enable; #$02 = Enable if flying/climbing/etc.
+  vertical_scroll_enabled = remap(0x13f1, "WRAM", 0x13f1, ""),
+  camera_scroll_timer = remap(0x1401, "WRAM", 0x1401, ""),
 
   -- Player
-  x = 0x0094,
-  y = 0x0096,
-  previous_x = 0x00d1,
-  previous_y = 0x00d3,
-  x_sub = 0x13da,
-  y_sub = 0x13dc,
-  x_speed = 0x007b,
-  x_subspeed = 0x007a,
-  y_speed = 0x007d,
-  direction = 0x0076,
-  is_ducking = 0x0073,
-  p_meter = 0x13e4,
-  take_off = 0x149f,
-  powerup = 0x0019,
-  cape_spin = 0x14a6,
-  cape_fall = 0x14a5,
-  cape_interaction = 0x13e8,
-  flight_animation = 0x1407,
-  cape_gliding_index = 0x1408,
-  diving_status = 0x1409,
-  diving_status_timer = 0x14a4,
-  player_animation_trigger = 0x0071,
-  climbing_status = 0x0074,
-  spinjump_flag = 0x140d,
-  player_blocked_status = 0x0077,
-  item_box = 0x0dc2,
-  cape_x = 0x13e9,
-  cape_y = 0x13eb,
-  on_ground = 0x13ef,
-  on_ground_delay = 0x008d,
-  on_air = 0x0072,
-  on_water = 0x0075,
-  can_jump_from_water = 0x13fa,
-  carrying_item = 0x148f,
-  player_pose_turning = 0x1499,
-  mario_score = 0x0f34,
-  player_coin = 0x0dbf,
-  player_looking_up = 0x13de,
-  OW_x = 0x1f17,
-  OW_y = 0x1f19,
+  x = remap(0x0094, "WRAM", 0x0094, ""),
+  y = remap(0x0096, "WRAM", 0x0096, ""),
+  previous_x = remap(0x00d1, "WRAM", 0x00d1, ""),
+  previous_y = remap(0x00d3, "WRAM", 0x00d3, ""),
+  x_sub = remap(0x13da, "WRAM", 0x13da, ""),
+  y_sub = remap(0x13dc, "WRAM", 0x13dc, ""),
+  x_speed = remap(0x007b, "WRAM", 0x007b, ""),
+  x_subspeed = remap(0x007a, "WRAM", 0x007a, ""),
+  y_speed = remap(0x007d, "WRAM", 0x007d, ""),
+  direction = remap(0x0076, "WRAM", 0x0076, ""),
+  is_ducking = remap(0x0073, "WRAM", 0x0073, ""),
+  p_meter = remap(0x13e4, "WRAM", 0x13e4, ""),
+  take_off = remap(0x149f, "WRAM", 0x149f, ""),
+  powerup = remap(0x0019, "WRAM", 0x0019, ""),
+  cape_spin = remap(0x14a6, "WRAM", 0x14a6, ""),
+  cape_fall = remap(0x14a5, "WRAM", 0x14a5, ""),
+  cape_interaction = remap(0x13e8, "WRAM", 0x13e8, ""),
+  flight_animation = remap(0x1407, "WRAM", 0x1407, ""),
+  cape_gliding_index = remap(0x1408, "WRAM", 0x1408, ""),
+  diving_status = remap(0x1409, "WRAM", 0x1409, ""),
+  diving_status_timer = remap(0x14a4, "WRAM", 0x14a4, ""),
+  player_animation_trigger = remap(0x0071, "WRAM", 0x0071, ""),
+  climbing_status = remap(0x0074, "WRAM", 0x0074, ""),
+  spinjump_flag = remap(0x140d, "WRAM", 0x140d, ""),
+  player_blocked_status = remap(0x0077, "WRAM", 0x0077, ""),
+  item_box = remap(0x0dc2, "WRAM", 0x0dc2, ""),
+  cape_x = remap(0x13e9, "WRAM", 0x13e9, ""),
+  cape_y = remap(0x13eb, "WRAM", 0x13eb, ""),
+  on_ground = remap(0x13ef, "WRAM", 0x13ef, ""),
+  on_ground_delay = remap(0x008d, "WRAM", 0x008d, ""),
+  on_air = remap(0x0072, "WRAM", 0x0072, ""),
+  on_water = remap(0x0075, "WRAM", 0x0075, ""),
+  can_jump_from_water = remap(0x13fa, "WRAM", 0x13fa, ""),
+  carrying_item = remap(0x148f, "WRAM", 0x148f, ""),
+  player_pose_turning = remap(0x1499, "WRAM", 0x1499, ""),
+  mario_score = remap(0x0f34, "WRAM", 0x0f34, ""),
+  player_coin = remap(0x0dbf, "WRAM", 0x0dbf, ""),
+  player_looking_up = remap(0x13de, "WRAM", 0x13de, ""),
+  OW_x = remap(0x1f17, "WRAM", 0x1f17, ""),
+  OW_y = remap(0x1f19, "WRAM", 0x1f19, ""),
 
   -- Yoshi
-  yoshi_riding_flag = 0x187a,  -- #$00 = No, #$01 = Yes, #$02 = Yes, and turning around.
-  yoshi_tile_pos = 0x0d8c,
-  yoshi_in_pipe = 0x1419,
+  yoshi_riding_flag = remap(0x187a, "WRAM", 0x187a, ""),  -- #$00 = No, #$01 = Yes, #$02 = Yes, and turning around.
+  yoshi_tile_pos = remap(0x0d8c, "WRAM", 0x0d8c, ""),
+  yoshi_in_pipe = remap(0x1419, "WRAM", 0x1419, ""),
   
   -- Sprites
-  sprite_status = 0x14c8,
-  sprite_number = 0x009e,
-  sprite_x_high = 0x14e0,
-  sprite_x_low = 0x00e4,
-  sprite_y_high = 0x14d4,
-  sprite_y_low = 0x00d8,
-  sprite_x_sub = 0x14f8,
-  sprite_y_sub = 0x14ec,
-  sprite_x_speed = 0x00b6,
-  sprite_y_speed = 0x00aa,
-  sprite_y_offscreen = 0x186c,
-  sprite_OAM_xoff = 0x0304,
-  sprite_OAM_yoff = 0x0305,
-  sprite_swap_slot = 0x1861,
-  sprite_phase = 0x00c2,
-  sprite_misc_1504 = 0x1504,
-  sprite_misc_1510 = 0x1510,
-  sprite_misc_151c = 0x151c,
-  sprite_misc_1528 = 0x1528,
-  sprite_misc_1534 = 0x1534,
-  sprite_stun_timer = 0x1540,
-  sprite_player_contact = 0x154c,
-  sprite_misc_1558 = 0x1558,
-  sprite_sprite_contact = 0x1564,
-  sprite_animation_timer = 0x1570,
-  sprite_horizontal_direction = 0x157c,
-  sprite_blocked_status = 0x1588,
-  sprite_misc_1594 = 0x1594,
-  sprite_x_offscreen = 0x15a0,
-  sprite_misc_15ac = 0x15ac,
-  sprite_being_eaten_flag = 0x15d0,
-  sprite_OAM_index = 0x15ea,
-  sprite_misc_1602 = 0x1602,
-  sprite_misc_160e = 0x160e,
-  sprite_index_to_level = 0x161a,
-  sprite_misc_1626 = 0x1626,
-  sprite_behind_scenery = 0x1632,
-  sprite_misc_163e = 0x163e,
-  sprite_misc_187b = 0x187b,
-  sprite_underwater = 0x164a,
-  sprite_disable_cape = 0x1fe2,
-  sprite_1_tweaker = 0x1656,
-  sprite_2_tweaker = 0x1662,
-  sprite_3_tweaker = 0x166e,
-  sprite_4_tweaker = 0x167a,
-  sprite_5_tweaker = 0x1686,
-  sprite_6_tweaker = 0x190f,
-  sprite_tongue_wait = 0x14a3,
-  sprite_yoshi_squatting = 0x18af,
-  sprite_buoyancy = 0x190e,
-  sprite_load_status_table = 0x1938, -- 128 bytes
-  sprite_load_status_table_pixi = 0x1af00, -- 128 bytes
-  bowser_attack_timers = 0x14b0, -- 9 bytes
-  yoshi_slot = 0x18df,
-  yoshi_loose_flag = 0x18e2,
-  yoshi_overworld_flag = 0x0dc1,
+  sprite_status = remap(0x14c8, "WRAM", 0x14c8, ""),
+  sprite_number = remap(0x009e, "WRAM", 0x009e, ""),
+  sprite_x_high = remap(0x14e0, "WRAM", 0x14e0, ""),
+  sprite_x_low = remap(0x00e4, "WRAM", 0x00e4, ""),
+  sprite_y_high = remap(0x14d4, "WRAM", 0x14d4, ""),
+  sprite_y_low = remap(0x00d8, "WRAM", 0x00d8, ""),
+  sprite_x_sub = remap(0x14f8, "WRAM", 0x14f8, ""),
+  sprite_y_sub = remap(0x14ec, "WRAM", 0x14ec, ""),
+  sprite_x_speed = remap(0x00b6, "WRAM", 0x00b6, ""),
+  sprite_y_speed = remap(0x00aa, "WRAM", 0x00aa, ""),
+  sprite_y_offscreen = remap(0x186c, "WRAM", 0x186c, ""),
+  sprite_OAM_xoff = remap(0x0304, "WRAM", 0x0304, ""),
+  sprite_OAM_yoff = remap(0x0305, "WRAM", 0x0305, ""),
+  sprite_swap_slot = remap(0x1861, "WRAM", 0x1861, ""),
+  sprite_phase = remap(0x00c2, "WRAM", 0x00c2, ""),
+  sprite_misc_1504 = remap(0x1504, "WRAM", 0x1504, ""),
+  sprite_misc_1510 = remap(0x1510, "WRAM", 0x1510, ""),
+  sprite_misc_151c = remap(0x151c, "WRAM", 0x151c, ""),
+  sprite_misc_1528 = remap(0x1528, "WRAM", 0x1528, ""),
+  sprite_misc_1534 = remap(0x1534, "WRAM", 0x1534, ""),
+  sprite_stun_timer = remap(0x1540, "WRAM", 0x1540, ""),
+  sprite_player_contact = remap(0x154c, "WRAM", 0x154c, ""),
+  sprite_misc_1558 = remap(0x1558, "WRAM", 0x1558, ""),
+  sprite_sprite_contact = remap(0x1564, "WRAM", 0x1564, ""),
+  sprite_animation_timer = remap(0x1570, "WRAM", 0x1570, ""),
+  sprite_horizontal_direction = remap(0x157c, "WRAM", 0x157c, ""),
+  sprite_blocked_status = remap(0x1588, "WRAM", 0x1588, ""),
+  sprite_misc_1594 = remap(0x1594, "WRAM", 0x1594, ""),
+  sprite_x_offscreen = remap(0x15a0, "WRAM", 0x15a0, ""),
+  sprite_misc_15ac = remap(0x15ac, "WRAM", 0x15ac, ""),
+  sprite_being_eaten_flag = remap(0x15d0, "WRAM", 0x15d0, ""),
+  sprite_OAM_index = remap(0x15ea, "WRAM", 0x15ea, ""),
+  sprite_misc_1602 = remap(0x1602, "WRAM", 0x1602, ""),
+  sprite_misc_160e = remap(0x160e, "WRAM", 0x160e, ""),
+  sprite_index_to_level = remap(0x161a, "WRAM", 0x161a, ""),
+  sprite_misc_1626 = remap(0x1626, "WRAM", 0x1626, ""),
+  sprite_behind_scenery = remap(0x1632, "WRAM", 0x1632, ""),
+  sprite_misc_163e = remap(0x163e, "WRAM", 0x163e, ""),
+  sprite_misc_187b = remap(0x187b, "WRAM", 0x187b, ""),
+  sprite_underwater = remap(0x164a, "WRAM", 0x164a, ""),
+  sprite_disable_cape = remap(0x1fe2, "WRAM", 0x1fe2, ""),
+  sprite_1_tweaker = remap(0x1656, "WRAM", 0x1656, ""),
+  sprite_2_tweaker = remap(0x1662, "WRAM", 0x1662, ""),
+  sprite_3_tweaker = remap(0x166e, "WRAM", 0x166e, ""),
+  sprite_4_tweaker = remap(0x167a, "WRAM", 0x167a, ""),
+  sprite_5_tweaker = remap(0x1686, "WRAM", 0x1686, ""),
+  sprite_6_tweaker = remap(0x190f, "WRAM", 0x190f, ""),
+  sprite_tongue_wait = remap(0x14a3, "WRAM", 0x14a3, ""),
+  sprite_yoshi_squatting = remap(0x18af, "WRAM", 0x18af, ""),
+  sprite_buoyancy = remap(0x190e, "WRAM", 0x190e, ""),
+  sprite_load_status_table = remap(0x1938, "WRAM", 0x1938, ""), -- 128 bytes
+  sprite_load_status_table_pixi = remap(0x1af00, "WRAM", 0x1af00, ""), -- 128 bytes
+  bowser_attack_timers = remap(0x14b0, "WRAM", 0x14b0, ""), -- 9 bytes
+  yoshi_slot = remap(0x18df, "WRAM", 0x18df, ""),
+  yoshi_loose_flag = remap(0x18e2, "WRAM", 0x18e2, ""),
+  yoshi_overworld_flag = remap(0x0dc1, "WRAM", 0x0dc1, ""),
   
   -- Misc sprite tables
-  sprite_miscellaneous1 = 0x00c2,
-  sprite_miscellaneous2 = 0x1504,
-  sprite_miscellaneous3 = 0x1510,
-  sprite_miscellaneous4 = 0x151c,
-  sprite_miscellaneous5 = 0x1528,
-  sprite_miscellaneous6 = 0x1534,
-  sprite_miscellaneous7 = 0x1540,
-  sprite_miscellaneous8 = 0x154c,
-  sprite_miscellaneous9 = 0x1558,
-  sprite_miscellaneous10 = 0x1564,
-  sprite_miscellaneous11 = 0x1570,
-  sprite_miscellaneous12 = 0x157c,
-  sprite_miscellaneous13 = 0x1594,
-  sprite_miscellaneous14 = 0x15ac,
-  sprite_miscellaneous15 = 0x1602,
-  sprite_miscellaneous16 = 0x160e,
-  sprite_miscellaneous17 = 0x1626,
-  sprite_miscellaneous18 = 0x163e,
-  sprite_miscellaneous19 = 0x187b,
+  sprite_miscellaneous1 = remap(0x00c2, "WRAM", 0x00c2, ""),
+  sprite_miscellaneous2 = remap(0x1504, "WRAM", 0x1504, ""),
+  sprite_miscellaneous3 = remap(0x1510, "WRAM", 0x1510, ""),
+  sprite_miscellaneous4 = remap(0x151c, "WRAM", 0x151c, ""),
+  sprite_miscellaneous5 = remap(0x1528, "WRAM", 0x1528, ""),
+  sprite_miscellaneous6 = remap(0x1534, "WRAM", 0x1534, ""),
+  sprite_miscellaneous7 = remap(0x1540, "WRAM", 0x1540, ""),
+  sprite_miscellaneous8 = remap(0x154c, "WRAM", 0x154c, ""),
+  sprite_miscellaneous9 = remap(0x1558, "WRAM", 0x1558, ""),
+  sprite_miscellaneous10 = remap(0x1564, "WRAM", 0x1564, ""),
+  sprite_miscellaneous11 = remap(0x1570, "WRAM", 0x1570, ""),
+  sprite_miscellaneous12 = remap(0x157c, "WRAM", 0x157c, ""),
+  sprite_miscellaneous13 = remap(0x1594, "WRAM", 0x1594, ""),
+  sprite_miscellaneous14 = remap(0x15ac, "WRAM", 0x15ac, ""),
+  sprite_miscellaneous15 = remap(0x1602, "WRAM", 0x1602, ""),
+  sprite_miscellaneous16 = remap(0x160e, "WRAM", 0x160e, ""),
+  sprite_miscellaneous17 = remap(0x1626, "WRAM", 0x1626, ""),
+  sprite_miscellaneous18 = remap(0x163e, "WRAM", 0x163e, ""),
+  sprite_miscellaneous19 = remap(0x187b, "WRAM", 0x187b, ""),
 
   -- Extended sprites
-  extspr_number = 0x170b,
-  extspr_x_high = 0x1733,
-  extspr_x_low = 0x171f,
-  extspr_y_high = 0x1729,
-  extspr_y_low = 0x1715,
-  extspr_x_speed = 0x1747,
-  extspr_y_speed = 0x173d,
-  extspr_suby = 0x1751,
-  extspr_subx = 0x175b,
-  extspr_table = 0x1765,
-  extspr_table2 = 0x176f,
+  extspr_number = remap(0x170b, "WRAM", 0x170b, ""),
+  extspr_x_high = remap(0x1733, "WRAM", 0x1733, ""),
+  extspr_x_low = remap(0x171f, "WRAM", 0x171f, ""),
+  extspr_y_high = remap(0x1729, "WRAM", 0x1729, ""),
+  extspr_y_low = remap(0x1715, "WRAM", 0x1715, ""),
+  extspr_x_speed = remap(0x1747, "WRAM", 0x1747, ""),
+  extspr_y_speed = remap(0x173d, "WRAM", 0x173d, ""),
+  extspr_suby = remap(0x1751, "WRAM", 0x1751, ""),
+  extspr_subx = remap(0x175b, "WRAM", 0x175b, ""),
+  extspr_table = remap(0x1765, "WRAM", 0x1765, ""),
+  extspr_table2 = remap(0x176f, "WRAM", 0x176f, ""),
 
   -- Cluster sprites
-  cluspr_flag = 0x18b8,
-  cluspr_number = 0x1892,
-  cluspr_x_high = 0x1e3e,
-  cluspr_x_low = 0x1e16,
-  cluspr_y_high = 0x1e2a,
-  cluspr_y_low = 0x1e02,
-  cluspr_timer = 0x0f9a,
-  cluspr_table_1 = 0x0f4a,
-  cluspr_table_2 = 0x0f72,
-  cluspr_table_3 = 0x0f86,
-  reappearing_boo_counter = 0x190a,
+  cluspr_flag = remap(0x18b8, "WRAM", 0x18b8, ""),
+  cluspr_number = remap(0x1892, "WRAM", 0x1892, ""),
+  cluspr_x_high = remap(0x1e3e, "WRAM", 0x1e3e, ""),
+  cluspr_x_low = remap(0x1e16, "WRAM", 0x1e16, ""),
+  cluspr_y_high = remap(0x1e2a, "WRAM", 0x1e2a, ""),
+  cluspr_y_low = remap(0x1e02, "WRAM", 0x1e02, ""),
+  cluspr_timer = remap(0x0f9a, "WRAM", 0x0f9a, ""),
+  cluspr_table_1 = remap(0x0f4a, "WRAM", 0x0f4a, ""),
+  cluspr_table_2 = remap(0x0f72, "WRAM", 0x0f72, ""),
+  cluspr_table_3 = remap(0x0f86, "WRAM", 0x0f86, ""),
+  reappearing_boo_counter = remap(0x190a, "WRAM", 0x190a, ""),
 
   -- Minor extended sprites
-  minorspr_number = 0x17f0,
-  minorspr_x_high = 0x18ea,
-  minorspr_x_low = 0x1808,
-  minorspr_y_high = 0x1814,
-  minorspr_y_low = 0x17fc,
-  minorspr_xspeed = 0x182c,
-  minorspr_yspeed = 0x1820,
-  minorspr_x_sub = 0x1844,
-  minorspr_y_sub = 0x1838,
-  minorspr_timer = 0x1850,
+  minorspr_number = remap(0x17f0, "WRAM", 0x17f0, ""),
+  minorspr_x_high = remap(0x18ea, "WRAM", 0x18ea, ""),
+  minorspr_x_low = remap(0x1808, "WRAM", 0x1808, ""),
+  minorspr_y_high = remap(0x1814, "WRAM", 0x1814, ""),
+  minorspr_y_low = remap(0x17fc, "WRAM", 0x17fc, ""),
+  minorspr_xspeed = remap(0x182c, "WRAM", 0x182c, ""),
+  minorspr_yspeed = remap(0x1820, "WRAM", 0x1820, ""),
+  minorspr_x_sub = remap(0x1844, "WRAM", 0x1844, ""),
+  minorspr_y_sub = remap(0x1838, "WRAM", 0x1838, ""),
+  minorspr_timer = remap(0x1850, "WRAM", 0x1850, ""),
 
   -- Bounce sprites
-  bouncespr_number = 0x1699,
-  bouncespr_x_high = 0x16ad,
-  bouncespr_x_low = 0x16a5,
-  bouncespr_y_high = 0x16a9,
-  bouncespr_y_low = 0x16a1,
-  bouncespr_timer = 0x16c5,
-  bouncespr_last_id = 0x18cd,
-  turn_block_timer = 0x18ce,
+  bouncespr_number = remap(0x1699, "WRAM", 0x1699, ""),
+  bouncespr_x_high = remap(0x16ad, "WRAM", 0x16ad, ""),
+  bouncespr_x_low = remap(0x16a5, "WRAM", 0x16a5, ""),
+  bouncespr_y_high = remap(0x16a9, "WRAM", 0x16a9, ""),
+  bouncespr_y_low = remap(0x16a1, "WRAM", 0x16a1, ""),
+  bouncespr_timer = remap(0x16c5, "WRAM", 0x16c5, ""),
+  bouncespr_last_id = remap(0x18cd, "WRAM", 0x18cd, ""),
+  turn_block_timer = remap(0x18ce, "WRAM", 0x18ce, ""),
 
   -- Quake sprites
-  quakespr_number = 0x16cd,
-  quakespr_x_high = 0x16d5,
-  quakespr_x_low = 0x16d1,
-  quakespr_y_high = 0x16dd,
-  quakespr_y_low = 0x16d9,
-  quakespr_timer = 0x18f8,
+  quakespr_number = remap(0x16cd, "WRAM", 0x16cd, ""),
+  quakespr_x_high = remap(0x16d5, "WRAM", 0x16d5, ""),
+  quakespr_x_low = remap(0x16d1, "WRAM", 0x16d1, ""),
+  quakespr_y_high = remap(0x16dd, "WRAM", 0x16dd, ""),
+  quakespr_y_low = remap(0x16d9, "WRAM", 0x16d9, ""),
+  quakespr_timer = remap(0x18f8, "WRAM", 0x18f8, ""),
 
   -- Timer
   --keep_mode_active = 0x0db1,
-  pipe_entrance_timer = 0x0088,
-  score_incrementing = 0x13d6,
-  fadeout_radius = 0x1433,
-  peace_image_timer = 0x1492,
-  end_level_timer = 0x1493,
-  multicoin_block_timer = 0x186b,
-  gray_pow_timer = 0x14ae,
-  blue_pow_timer = 0x14ad,
-  dircoin_timer = 0x190c,
-  pballoon_timer = 0x1891,
-  star_timer = 0x1490,
-  animation_timer = 0x1496,
-  invisibility_timer = 0x1497,
-  fireflower_timer = 0x149b,
-  yoshi_timer = 0x18e8,
-  swallow_timer = 0x18ac,
-  lakitu_timer = 0x18e0,
-  spinjump_fireball_timer = 0x13e2,
-  game_intro_timer = 0x1df5,
-  pause_timer = 0x13d3,
-  bonus_timer = 0x14ab,
-  disappearing_sprites_timer = 0x18bf,
-  message_box_timer = 0x1b89,
+  pipe_entrance_timer = remap(0x0088, "WRAM", 0x0088, ""),
+  score_incrementing = remap(0x13d6, "WRAM", 0x13d6, ""),
+  fadeout_radius = remap(0x1433, "WRAM", 0x1433, ""),
+  peace_image_timer = remap(0x1492, "WRAM", 0x1492, ""),
+  end_level_timer = remap(0x1493, "WRAM", 0x1493, ""),
+  multicoin_block_timer = remap(0x186b, "WRAM", 0x186b, ""),
+  gray_pow_timer = remap(0x14ae, "WRAM", 0x14ae, ""),
+  blue_pow_timer = remap(0x14ad, "WRAM", 0x14ad, ""),
+  dircoin_timer = remap(0x190c, "WRAM", 0x190c, ""),
+  pballoon_timer = remap(0x1891, "WRAM", 0x1891, ""),
+  star_timer = remap(0x1490, "WRAM", 0x1490, ""),
+  animation_timer = remap(0x1496, "WRAM", 0x1496, ""),
+  invisibility_timer = remap(0x1497, "WRAM", 0x1497, ""),
+  fireflower_timer = remap(0x149b, "WRAM", 0x149b, ""),
+  yoshi_timer = remap(0x18e8, "WRAM", 0x18e8, ""),
+  swallow_timer = remap(0x18ac, "WRAM", 0x18ac, ""),
+  lakitu_timer = remap(0x18e0, "WRAM", 0x18e0, ""),
+  spinjump_fireball_timer = remap(0x13e2, "WRAM", 0x13e2, ""),
+  game_intro_timer = remap(0x1df5, "WRAM", 0x1df5, ""),
+  pause_timer = remap(0x13d3, "WRAM", 0x13d3, ""),
+  bonus_timer = remap(0x14ab, "WRAM", 0x14ab, ""),
+  disappearing_sprites_timer = remap(0x18bf, "WRAM", 0x18bf, ""),
+  message_box_timer = remap(0x1b89, "WRAM", 0x1b89, ""),
 
   -- Cheats
-  frozen = 0x13fb,
-  level_paused = 0x13d4,
-  translevel_index = 0x13bf,
-  level_flag_table = 0x1ea2,
-  level_exit_type = 0x0dd5,
-  midway_point = 0x13ce,
+  frozen = remap(0x13fb, "WRAM", 0x13fb, ""),
+  level_paused = remap(0x13d4, "WRAM", 0x13d4, ""),
+  translevel_index = remap(0x13bf, "WRAM", 0x13bf, ""),
+  level_flag_table = remap(0x1ea2, "WRAM", 0x1ea2, ""),
+  level_exit_type = remap(0x0dd5, "WRAM", 0x0dd5, ""),
+  midway_point = remap(0x13ce, "WRAM", 0x13ce, ""),
   
   -- Layers
-  layer2_x_nextframe = 0x1466,
-  layer2_y_nextframe = 0x1468,
+  layer2_x_nextframe = remap(0x1466, "WRAM", 0x1466, ""),
+  layer2_y_nextframe = remap(0x1468, "WRAM", 0x1468, ""),
 }
 
 local SMW = {
@@ -2539,8 +2552,8 @@ end
 -- Returns the id of Yoshi; if more than one, the lowest sprite slot
 local function get_yoshi_id()
   for i = 0, SMW.sprite_max - 1 do -- sprite_max = 12
-    local id = u8(WRAM.sprite_number + i)
-    local status = u8(WRAM.sprite_status + i)
+    local id = mem(u8, WRAM.sprite_number, i)
+    local status = mem(u8, WRAM.sprite_status, i)
     if id == 0x35 and status ~= 0 then return i end
   end
 
@@ -2556,24 +2569,23 @@ local function screen_coordinates(x, y, camera_x, camera_y)
   return x_screen, y_screen
 end
 
-
 local Previous_real_frame, Real_frame, Effective_frame, Game_mode, Current_character
 local Translevel_index, LM_translevel_number, Level_index, Layer1_data_pointer, Level_flag
 local Camera_x, Camera_y, Player_x, Player_y, Player_x_screen, Player_y_screen
 local Is_paused, Lock_animation_flag, Player_powerup, Player_animation_trigger, Yoshi_riding_flag, Yoshi_id
 local function scan_smw()
   -- General info
-  Previous_real_frame = Real_frame or u8(WRAM.real_frame)
-  Real_frame = u8(WRAM.real_frame)
-  Effective_frame = u8(WRAM.effective_frame)
-  Game_mode = u8(WRAM.game_mode)
-  Current_character = u8(WRAM.current_character) == 0 and "Mario" or "Luigi"
+  Previous_real_frame = Real_frame or mem(u8, WRAM.real_frame)
+  Real_frame = mem(u8, WRAM.real_frame)
+  Effective_frame = mem(u8, WRAM.effective_frame)
+  Game_mode = mem(u8, WRAM.game_mode)
+  Current_character = mem(u8, WRAM.current_character) == 0 and "Mario" or "Luigi"
   
   -- Level info
-  Translevel_index = u8(WRAM.translevel_index)
+  Translevel_index = mem(u8, WRAM.translevel_index)
   LM_translevel_number = Translevel_index
   if Translevel_index > 0x24 then LM_translevel_number = Translevel_index + 0xDC end
-  Sprite_data_pointer = u24(WRAM.sprite_data_pointer)
+  Sprite_data_pointer = mem(u24, WRAM.sprite_data_pointer)
   for i = 1, 512 do
     if Sprite_data_pointer == SMW.sprite_data_pointers[i] then
       Level_index = i - 1
@@ -2581,22 +2593,22 @@ local function scan_smw()
     end
   end
   if Level_index == nil then Level_index = 0 end
-  Layer1_data_pointer = u24(WRAM.layer1_data_pointer)
-  Level_flag = u8(WRAM.level_flag_table + Translevel_index)
+  Layer1_data_pointer = mem(u24, WRAM.layer1_data_pointer)
+  Level_flag = mem(u8, WRAM.level_flag_table, Translevel_index)
 
   -- Common coordinates
-  Camera_x = u16(WRAM.camera_x)
-  Camera_y = u16(WRAM.camera_y)
-  Player_x = s16(WRAM.x)
-  Player_y = s16(WRAM.y)
+  Camera_x = mem(u16, WRAM.camera_x)
+  Camera_y = mem(u16, WRAM.camera_y)
+  Player_x = mem(s16, WRAM.x)
+  Player_y = mem(s16, WRAM.y)
   Player_x_screen, Player_y_screen = screen_coordinates(Player_x, Player_y, Camera_x, Camera_y)
   
   -- In level frequently used info
-  Is_paused = u8(WRAM.level_paused) == 1
-  Lock_animation_flag = u8(WRAM.lock_animation_flag)
-  Player_powerup = u8(WRAM.powerup)
-  Player_animation_trigger = u8(WRAM.player_animation_trigger)
-  Yoshi_riding_flag = u8(WRAM.yoshi_riding_flag) ~= 0
+  Is_paused = mem(u8, WRAM.level_paused) == 1
+  Lock_animation_flag = mem(u8, WRAM.lock_animation_flag)
+  Player_powerup = mem(u8, WRAM.powerup)
+  Player_animation_trigger = mem(u8, WRAM.player_animation_trigger)
+  Yoshi_riding_flag = mem(u8, WRAM.yoshi_riding_flag) ~= 0
   Yoshi_id = get_yoshi_id()
   Display.is_player_near_borders = Player_x_screen <= 32 or Player_x_screen >= 0xd0 or Player_y_screen <= -100 or Player_y_screen >= 224
 end
@@ -2605,8 +2617,8 @@ end
 -- Converts BizHawk/emu-screen coordinates to in-game (x, y)
 local function game_coordinates(x_emu, y_emu, camera_x, camera_y)
   -- Sane values
-  camera_x = camera_x or Camera_x or u8(WRAM.camera_x)
-  camera_y = camera_y or Camera_y or u8(WRAM.camera_y)
+  camera_x = camera_x or Camera_x or mem(u8, WRAM.camera_x)
+  camera_y = camera_y or Camera_y or mem(u8, WRAM.camera_y)
 
   local x_game = x_emu + camera_x
   local y_game = y_emu + camera_y
@@ -2629,7 +2641,7 @@ local function display_boundaries(x_game, y_game, width, height, camera_x, camer
   local bottom = top + height - 1
 
   -- Reads WRAM values of the player
-  local is_ducking = u8(WRAM.is_ducking)
+  local is_ducking = mem(u8, WRAM.is_ducking)
   local powerup = Player_powerup
   local is_small = is_ducking ~= 0 or powerup == 0
   
@@ -2663,16 +2675,16 @@ end
 
 
 local function read_screens()
-  local screen_mode = u8(WRAM.screen_mode)
+  local screen_mode = mem(u8, WRAM.screen_mode)
   local level_type = bit.test(screen_mode, 0) and "Vertical" or "Horizontal"
   
-  local screens_number = u8(WRAM.screens_number)
+  local screens_number = mem(u8, WRAM.screens_number)
   
-  local hscreen_current = u8(WRAM.x + 1)
-  local hscreen_number = u8(WRAM.hscreen_number) - (level_type == "Horizontal" and 1 or 0)
+  local hscreen_current = mem(u8, WRAM.x, 1)
+  local hscreen_number = mem(u8, WRAM.hscreen_number) - (level_type == "Horizontal" and 1 or 0)
   
-  local vscreen_current = u8(WRAM.y + 1)
-  local vscreen_number = u8(WRAM.vscreen_number) - (level_type == "Vertical" and 1 or 0)
+  local vscreen_current = mem(u8, WRAM.y, 1)
+  local vscreen_number = mem(u8, WRAM.vscreen_number) - (level_type == "Vertical" and 1 or 0)
 
   return level_type, screens_number, hscreen_current, hscreen_number, vscreen_current, vscreen_number
 end
@@ -2718,7 +2730,7 @@ local function get_map16_value(x_game, y_game)
   end
   if (num_id >= 0 and num_id <= 0x37ff) then
     address = fmt(" $%4.x", 0xc800 + num_id)
-    kind = 256*u8(0x1c800 + num_id) + u8(0xc800 + num_id)
+    kind = 256*mem(u8, 0x1c800, num_id) + mem(u8, 0xc800, num_id)
   end
 
   if kind then
@@ -2729,12 +2741,12 @@ end
 
 
 local function draw_slope_tile(kind, left, top)
-  local slope_pointer = u24(0x82) + kind - 0x16E
-  -- print(fmt("%04X -> %04X -> %04X", kind, slope_pointer, u8(slope_pointer)))
+  local slope_pointer = mem(u24, 0x82) + kind - 0x16E
+  -- print(fmt("%04X -> %04X -> %04X", kind, slope_pointer, mem(u8, slope_pointer)))
   for x = 0,15 do
-    local index = u8(slope_pointer, "System Bus")*16 + x
+    local index = mem(u8, slope_pointer, "System Bus")*16 + x
     -- print(fmt("%04X %04X", x, index))
-    local y = u8(0xe632 + index, "System Bus")
+    local y = mem(u8, 0xe632, index, "System Bus")
     draw.line(left+x, top+y, left+x, top+y+10, COLOUR.slope_tile)
   end
 
@@ -2791,8 +2803,8 @@ end
 
 
 local function draw_layer2_tiles()
-  local layer2x = s16(WRAM.layer2_x_nextframe)
-  local layer2y = s16(WRAM.layer2_y_nextframe)
+  local layer2x = mem(s16, WRAM.layer2_x_nextframe)
+  local layer2y = mem(s16, WRAM.layer2_y_nextframe)
 
   for number, positions in ipairs(Layer2_tiles) do
     draw.rectangle(-layer2x + positions[1], -layer2y + positions[2], 15, 15, COLOUR.layer2_line, COLOUR.layer2_bg)
@@ -2847,15 +2859,15 @@ local function select_object(mouse_x, mouse_y, camera_x, camera_y)
   local obj_id
 
   -- Checks if the mouse is over Mario
-  local x_player = s16(WRAM.x)
-  local y_player = s16(WRAM.y)
+  local x_player = mem(s16, WRAM.x)
+  local y_player = mem(s16, WRAM.y)
   if x_player + 0xe >= x_game and x_player + 0x2 <= x_game and y_player + 0x30 >= y_game and y_player + 0x8 <= y_game then
     obj_id = "Mario"
   end
 
   if not obj_id and OPTIONS.display_sprite_info then
     for id = 0, SMW.sprite_max - 1 do -- sprite_max = 12
-      local sprite_status = u8(WRAM.sprite_status + id)
+      local sprite_status = mem(u8, WRAM.sprite_status, id)
       if sprite_status ~= 0 and Sprites_info[id].x then  -- TODO: see why the script gets here without exporting Sprites_info
         -- Import some values
         local x_sprite, y_sprite = Sprites_info[id].x, Sprites_info[id].y
@@ -2922,8 +2934,8 @@ local function right_click()
   end
 
   -- Select layer 2 tiles
-  local layer2x = s16(WRAM.layer2_x_nextframe)
-  local layer2y = s16(WRAM.layer2_y_nextframe)
+  local layer2x = mem(s16, WRAM.layer2_x_nextframe)
+  local layer2y = mem(s16, WRAM.layer2_y_nextframe)
   local x_mouse, y_mouse = User_input.xmouse + layer2x, User_input.ymouse + layer2y
   select_tile(16*floor(x_mouse/16), 16*floor(y_mouse/16), Layer2_tiles)
 end
@@ -3060,7 +3072,7 @@ local function show_game_info()
   draw.Bg_opacity = 1.0
 
   -- Display
-  local RNG = u16(WRAM.RNG)
+  local RNG = mem(u16, WRAM.RNG)
   local main_info = string.format("Frame(%02X, %02X) RNG(%04X) Mode(%02X)",
                       Real_frame, Effective_frame, RNG, Game_mode)
   ;
@@ -3075,20 +3087,20 @@ local function show_game_info()
     end
     local x_cam_txt = draw.text(draw.Buffer_middle_x*draw.AR_x, 0, cam_str, COLOUR.text, true, false, 0.5)
     
-    local vertical_scroll_flag_header = u8(WRAM.vertical_scroll_flag_header)
-    local vertical_scroll_enabled = u8(WRAM.vertical_scroll_enabled)
+    local vertical_scroll_flag_header = mem(u8, WRAM.vertical_scroll_flag_header)
+    local vertical_scroll_enabled = mem(u8, WRAM.vertical_scroll_enabled)
     if vertical_scroll_flag_header ~=0 and vertical_scroll_enabled ~= 0 then
       draw.text(x_cam_txt + BIZHAWK_FONT_WIDTH, 0, vertical_scroll_enabled, COLOUR.warning2)
     end  
   
     -- Time frame counter of the clock
     draw.Text_opacity = 1.0
-    local timer_frame_counter = u8(WRAM.timer_frame_counter)
+    local timer_frame_counter = mem(u8, WRAM.timer_frame_counter)
     draw.text(draw.AR_x*161, draw.AR_y*15, fmt("%.2d", timer_frame_counter))
 
     -- Score: sum of digits, useful for avoiding lag
     draw.Text_opacity = 0.5
-    local score = u24(WRAM.mario_score)
+    local score = mem(u24, WRAM.mario_score)
     draw.text(draw.AR_x*240, draw.AR_y*24, fmt("=%d", luap.sum_digits(score)), COLOUR.weak)
   end
 end
@@ -3116,7 +3128,7 @@ function display_RNG()
   local height = BIZHAWK_FONT_HEIGHT
   local upper_rows = 8
 
-  local index = u32(WRAM.RNG_input)
+  local index = mem(u32, WRAM.RNG_input)
   local RNG_counter = RNG.possible_values[index]
   
   if RNG_counter then
@@ -3147,8 +3159,8 @@ local function show_mouse_info()
   local bg_colour = change_transparency(COLOUR.background, draw.Bg_opacity)
   
   local x, y = User_input.xmouse + OPTIONS.left_gap, User_input.ymouse + OPTIONS.top_gap
-  local camera_x = Game_mode == SMW.game_mode_level and Camera_x or s16(WRAM.layer1_x_mirror)
-  local camera_y = Game_mode == SMW.game_mode_level and Camera_y or s16(WRAM.layer1_y_mirror)
+  local camera_x = Game_mode == SMW.game_mode_level and Camera_x or mem(s16, WRAM.layer1_x_mirror)
+  local camera_y = Game_mode == SMW.game_mode_level and Camera_y or mem(s16, WRAM.layer1_y_mirror)
   local x_game, y_game = game_coordinates(User_input.xmouse, User_input.ymouse, camera_x, camera_y)
   --if x_game < 0 then x_game = 0x10000 + x_game end
   --if y_game < 0 then y_game = 0x10000 + y_game end
@@ -3176,11 +3188,11 @@ local function show_controller_data()
   local height = BIZHAWK_FONT_HEIGHT
   local x_pos, y_pos, x, y, _ = -draw.Border_left, 0, 0, BIZHAWK_FONT_HEIGHT
 
-  x = draw.over_text(x_pos, y_pos, 256*u8(WRAM.ctrl_1_1) + u8(WRAM.ctrl_1_2), "BYsS^v<>AXLR0123", COLOUR.weak)
+  x = draw.over_text(x_pos, y_pos, 256*mem(u8, WRAM.ctrl_1_1) + mem(u8, WRAM.ctrl_1_2), "BYsS^v<>AXLR0123", COLOUR.weak)
   _, y = draw.text(x, y_pos, " (RAM data)", COLOUR.weak)
 
   x = x_pos
-  draw.over_text(x, y, 256*u8(WRAM.firstctrl_1_1) + u8(WRAM.firstctrl_1_2), "BYsS^v<>AXLR0123", 0, COLOUR.warning, 0)
+  draw.over_text(x, y, 256*mem(u8, WRAM.firstctrl_1_1) + mem(u8, WRAM.firstctrl_1_2), "BYsS^v<>AXLR0123", 0, COLOUR.warning, 0)
 end
 
 
@@ -3228,16 +3240,16 @@ local function sprite_level_info()
   -- Sprite load status enviroment
   local indexes = {}
   for id = 0, 11 do
-    local sprite_status = u8(WRAM.sprite_status + id)
+    local sprite_status = mem(u8, WRAM.sprite_status, id)
 
     if sprite_status ~= 0 then
-      local index = u8(WRAM.sprite_index_to_level + id)
+      local index = mem(u8, WRAM.sprite_index_to_level, id)
       indexes[index] = true
     end
   end
   -- Note from SMWC: Pixi may move this table to $7FAF00 in order to expand the table to 256 bytes, if the !Disable255SpritesPerLevel configuration flag is turned off.
   local status_table_address = OPTIONS.use_pixi_status_table and WRAM.sprite_load_status_table_pixi or WRAM.sprite_load_status_table
-  local status_table = memory.readbyterange(status_table_address, 0x80)
+  local status_table = memory.readbyterange(status_table_address.address, 0x80)
 
   local x_origin = 0
   local y_origin = OPTIONS.top_gap + draw.Buffer_height - 4*11
@@ -3375,7 +3387,7 @@ local function level_info()
     y_pos = y_pos + BIZHAWK_FONT_HEIGHT
     
     -- Sprite buoyancy
-    local sprite_buoyancy = u8(WRAM.sprite_buoyancy)
+    local sprite_buoyancy = mem(u8, WRAM.sprite_buoyancy)
     if sprite_buoyancy ~= 0 then
       -- $7E190E has format "XY-- ----", with X = Enable sprite buoyancy and Y = Enable sprite buoyancy and disable sprite interaction with layer 2
       local layer2_disabled = bit.test(sprite_buoyancy, 6) and " (Layer 2 disabled)" or ""
@@ -3541,11 +3553,11 @@ end
 
 -- displays the hitbox of the cape while spinning
 local function cape_hitbox(spin_direction)
-  local cape_interaction = u8(WRAM.cape_interaction)
+  local cape_interaction = mem(u8, WRAM.cape_interaction)
   if cape_interaction == 0 then return end
 
-  local cape_x = u16(WRAM.cape_x)
-  local cape_y = u16(WRAM.cape_y)
+  local cape_x = mem(u16, WRAM.cape_x)
+  local cape_y = mem(u16, WRAM.cape_y)
 
   local cape_x_screen, cape_y_screen = screen_coordinates(cape_x, cape_y, Camera_x, Camera_y)
   local cape_left = -2
@@ -3577,7 +3589,7 @@ local function sprite_block_interaction_simulator(x_block_left, y_block_bottom)
   -- get 1st carried sprite slot
   local slot
   for id = 0, SMW.sprite_max - 1 do -- sprite_max = 12
-    if u8(WRAM.sprite_status + id) == 0x0b then
+    if mem(u8, WRAM.sprite_status, id) == 0x0b then
       slot = id
       break
     end
@@ -3585,12 +3597,12 @@ local function sprite_block_interaction_simulator(x_block_left, y_block_bottom)
   if not slot then return false end
 
   -- sprite properties
-  local ini_x = luap.signed16(256*u8(WRAM.sprite_x_high + slot) + u8(WRAM.sprite_x_low + slot))
-  local ini_y = luap.signed16(256*u8(WRAM.sprite_y_high + slot) + u8(WRAM.sprite_y_low + slot))
-  local ini_y_sub = u8(WRAM.sprite_y_sub + slot)
+  local ini_x = luap.signed16(256*mem(u8, WRAM.sprite_x_high, slot) + mem(u8, WRAM.sprite_x_low, slot))
+  local ini_y = luap.signed16(256*mem(u8, WRAM.sprite_y_high, slot) + mem(u8, WRAM.sprite_y_low, slot))
+  local ini_y_sub = mem(u8, WRAM.sprite_y_sub, slot)
 
   -- Sprite clipping vs objects
-  local clip_obj = bit.band(u8(WRAM.sprite_1_tweaker + slot), 0xf)
+  local clip_obj = bit.band(mem(u8, WRAM.sprite_1_tweaker, slot), 0xf)
   local ypt_right = SMW.obj_clipping_sprite[clip_obj].yright
   local ypt_left = SMW.obj_clipping_sprite[clip_obj].yleft
   local xpt_up = SMW.obj_clipping_sprite[clip_obj].xup
@@ -3679,34 +3691,34 @@ local function player()
   draw.Text_opacity = 1.0
 
   -- Reads WRAM
-  local x = s16(WRAM.x)
-  local y = s16(WRAM.y)
-  local previous_x = u16(WRAM.previous_x)
-  local previous_y = u16(WRAM.previous_y)
-  local x_sub = u8(WRAM.x_sub)
-  local y_sub = u8(WRAM.y_sub)
-  local x_speed = s8(WRAM.x_speed)
-  local x_speed_u = u8(WRAM.x_speed) -- used to print a proper hex value
-  local x_subspeed = u8(WRAM.x_subspeed)
-  local y_speed = s8(WRAM.y_speed)
-  local y_speed_u = u8(WRAM.y_speed) -- used to print a proper hex value
-  local p_meter = u8(WRAM.p_meter)
-  local take_off = u8(WRAM.take_off)
+  local x = mem(s16, WRAM.x)
+  local y = mem(s16, WRAM.y)
+  local previous_x = mem(u16, WRAM.previous_x)
+  local previous_y = mem(u16, WRAM.previous_y)
+  local x_sub = mem(u8, WRAM.x_sub)
+  local y_sub = mem(u8, WRAM.y_sub)
+  local x_speed = mem(s8, WRAM.x_speed)
+  local x_speed_u = mem(u8, WRAM.x_speed) -- used to print a proper hex value
+  local x_subspeed = mem(u8, WRAM.x_subspeed)
+  local y_speed = mem(s8, WRAM.y_speed)
+  local y_speed_u = mem(u8, WRAM.y_speed) -- used to print a proper hex value
+  local p_meter = mem(u8, WRAM.p_meter)
+  local take_off = mem(u8, WRAM.take_off)
   local powerup = Player_powerup
-  local direction = u8(WRAM.direction)
-  local cape_spin = u8(WRAM.cape_spin)
-  local cape_fall = u8(WRAM.cape_fall)
-  local flight_animation = u8(WRAM.flight_animation)
-  local diving_status = s8(WRAM.diving_status)
-  local player_blocked_status = u8(WRAM.player_blocked_status)
-  local item_box = u8(WRAM.item_box)
-  local is_ducking = u8(WRAM.is_ducking)
-  local on_ground = u8(WRAM.on_ground)
-  local on_water = u8(WRAM.on_water)
-  local spinjump_flag = u8(WRAM.spinjump_flag)
-  local can_jump_from_water = u8(WRAM.can_jump_from_water)
-  local carrying_item = u8(WRAM.carrying_item)
-  local vertical_scroll_flag_header = u8(WRAM.vertical_scroll_flag_header)
+  local direction = mem(u8, WRAM.direction)
+  local cape_spin = mem(u8, WRAM.cape_spin)
+  local cape_fall = mem(u8, WRAM.cape_fall)
+  local flight_animation = mem(u8, WRAM.flight_animation)
+  local diving_status = mem(s8, WRAM.diving_status)
+  local player_blocked_status = mem(u8, WRAM.player_blocked_status)
+  local item_box = mem(u8, WRAM.item_box)
+  local is_ducking = mem(u8, WRAM.is_ducking)
+  local on_ground = mem(u8, WRAM.on_ground)
+  local on_water = mem(u8, WRAM.on_water)
+  local spinjump_flag = mem(u8, WRAM.spinjump_flag)
+  local can_jump_from_water = mem(u8, WRAM.can_jump_from_water)
+  local carrying_item = mem(u8, WRAM.carrying_item)
+  local vertical_scroll_flag_header = mem(u8, WRAM.vertical_scroll_flag_header)
 
   -- Transformations
   if direction == 0 then direction = LEFT_ARROW else direction = RIGHT_ARROW end
@@ -3815,8 +3827,8 @@ local function player()
     end
     
     if is_caped then
-      local cape_gliding_index = u8(WRAM.cape_gliding_index)
-      local diving_status_timer = u8(WRAM.diving_status_timer)
+      local cape_gliding_index = mem(u8, WRAM.cape_gliding_index)
+      local diving_status_timer = mem(u8, WRAM.diving_status_timer)
       local action = SMW.flight_actions[cape_gliding_index] or "bug!"
       
       -- TODO: better name for this "glitched" state
@@ -3849,7 +3861,7 @@ local function player()
     Display.show_player_point_position = true
     
     -- Horizontal scroll
-    local left_cam, right_cam = u16(WRAM.camera_left_limit), u16(WRAM.camera_right_limit)
+    local left_cam, right_cam = mem(u16, WRAM.camera_left_limit), mem(u16, WRAM.camera_right_limit)
     local center_cam = floor((left_cam + right_cam)/2)
     draw.box(left_cam, 0, right_cam, 224, COLOUR.static_camera_region, COLOUR.static_camera_region)
     draw.line(center_cam, 0, center_cam, 224, "black")
@@ -3895,20 +3907,20 @@ local function extended_sprites()
   local y_pos = draw.AR_y*144
   local counter = 0
   for id = 0, SMW.extended_sprite_max - 1 do -- extended_sprite_max = 10
-    local extspr_number = u8(WRAM.extspr_number + id)
+    local extspr_number = mem(u8, WRAM.extspr_number, id)
 
     if extspr_number ~= 0 then
       -- Read WRAM addresses
-      local x = 256*u8(WRAM.extspr_x_high + id) + u8(WRAM.extspr_x_low + id)
-      local y = 256*u8(WRAM.extspr_y_high + id) + u8(WRAM.extspr_y_low + id)
-      local x_sub = bit.rshift(u8(WRAM.extspr_subx + id), 4)
-      local y_sub = bit.rshift(u8(WRAM.extspr_suby + id), 4)
-      local x_speed = s8(WRAM.extspr_x_speed + id)
-      local x_speed_u = u8(WRAM.extspr_x_speed + id)
-      local y_speed = s8(WRAM.extspr_y_speed + id)
-      local y_speed_u = u8(WRAM.extspr_y_speed + id)
-      local extspr_table = u8(WRAM.extspr_table + id)
-      local extspr_table2 = u8(WRAM.extspr_table2 + id)
+      local x = 256*mem(u8, WRAM.extspr_x_high, id) + mem(u8, WRAM.extspr_x_low, id)
+      local y = 256*mem(u8, WRAM.extspr_y_high, id) + mem(u8, WRAM.extspr_y_low, id)
+      local x_sub = bit.rshift(mem(u8, WRAM.extspr_subx, id), 4)
+      local y_sub = bit.rshift(mem(u8, WRAM.extspr_suby, id), 4)
+      local x_speed = mem(s8, WRAM.extspr_x_speed, id)
+      local x_speed_u = mem(u8, WRAM.extspr_x_speed, id)
+      local y_speed = mem(s8, WRAM.extspr_y_speed, id)
+      local y_speed_u = mem(u8, WRAM.extspr_y_speed, id)
+      local extspr_table = mem(u8, WRAM.extspr_table, id)
+      local extspr_table2 = mem(u8, WRAM.extspr_table2, id)
 
       -- Reduction of useless info
       local special_info = ""
@@ -3976,8 +3988,8 @@ local function extended_sprites()
   --draw.Text_opacity = 0.5
   local x_pos, y_pos, length = draw.text(draw.Buffer_width + draw.Border_right, y_pos, fmt("Extended sprites: %d", counter), COLOUR.weak, true, false, 0.0, 1.0)
 
-  if u8(WRAM.spinjump_flag) ~= 0 and u8(WRAM.powerup) == 3 then
-    local fireball_timer = u8(WRAM.spinjump_fireball_timer)
+  if mem(u8, WRAM.spinjump_flag) ~= 0 and mem(u8, WRAM.powerup) == 3 then
+    local fireball_timer = mem(u8, WRAM.spinjump_fireball_timer)
     draw.text(x_pos - length - BIZHAWK_FONT_WIDTH, y_pos, fmt("%d %s",
     fireball_timer%16, bit.test(fireball_timer, 4) and RIGHT_ARROW or LEFT_ARROW), COLOUR.extended_sprites, true, false, 1.0, 1.0)
   end
@@ -3987,7 +3999,7 @@ end
 
 local cluster_sprite_warning_cooldown = 0
 local function cluster_sprites()
-  if not OPTIONS.display_other_sprites_info or not OPTIONS.display_cluster_sprite_info or u8(WRAM.cluspr_flag) == 0 then return end
+  if not OPTIONS.display_other_sprites_info or not OPTIONS.display_cluster_sprite_info or mem(u8, WRAM.cluspr_flag) == 0 then return end
 
   -- Font
   draw.Text_opacity = 0.8
@@ -3998,7 +4010,7 @@ local function cluster_sprites()
   local reappearing_boo_counter
 
   for id = 0, SMW.cluster_sprite_max - 1 do -- cluster_sprite_max = 20
-    local clusterspr_number = u8(WRAM.cluspr_number + id)
+    local clusterspr_number = mem(u8, WRAM.cluspr_number, id)
 
     if clusterspr_number ~= 0 then
       if not SMW.hitbox_cluster_sprite[clusterspr_number] then
@@ -4011,8 +4023,8 @@ local function cluster_sprites()
       end
 
       -- Read WRAM addresses
-      local x = luap.signed16(256*u8(WRAM.cluspr_x_high + id) + u8(WRAM.cluspr_x_low + id))
-      local y = luap.signed16(256*u8(WRAM.cluspr_y_high + id) + u8(WRAM.cluspr_y_low + id))
+      local x = luap.signed16(256*mem(u8, WRAM.cluspr_x_high, id) + mem(u8, WRAM.cluspr_x_low, id))
+      local y = luap.signed16(256*mem(u8, WRAM.cluspr_y_high, id) + mem(u8, WRAM.cluspr_y_low, id))
       local clusterspr_timer, special_info, table_1, table_2, table_3
 
       -- Read cluster's table
@@ -4032,9 +4044,9 @@ local function cluster_sprites()
       -- Reduction of useless info
       local special_info = ""
       if OPTIONS.display_debug_cluster_sprite then
-        table_1 = u8(WRAM.cluspr_table_1 + id)
-        table_2 = u8(WRAM.cluspr_table_2 + id)
-        table_3 = u8(WRAM.cluspr_table_3 + id)
+        table_1 = mem(u8, WRAM.cluspr_table_1, id)
+        table_2 = mem(u8, WRAM.cluspr_table_2, id)
+        table_3 = mem(u8, WRAM.cluspr_table_3, id)
         special_info = fmt(" (%d, %d, %d)", table_1, table_2, table_3)
       end
       
@@ -4047,12 +4059,12 @@ local function cluster_sprites()
       if OPTIONS.display_debug_cluster_sprite then
         if clusterspr_number == 3 or clusterspr_number == 8 then -- Boo from Boo Ceiling / Swooper Bat from Swooper Death Bat Ceiling
         
-          clusterspr_timer = u8(WRAM.cluspr_timer + id)
+          clusterspr_timer = mem(u8, WRAM.cluspr_timer, id)
           if clusterspr_timer ~= 0 then special_info = " " .. clusterspr_timer end
           
         elseif clusterspr_number == 6 then -- Sumo Brother lightning flames
         
-          table_1 = table_1 or u8(WRAM.cluspr_table_1 + id)
+          table_1 = table_1 or mem(u8, WRAM.cluspr_table_1, id)
           if table_1 >= 111 or (table_1 < 31 and table_1 >= 16) then
             yoff = yoff + 17
           elseif table_1 >= 103 or table_1 < 16 then
@@ -4064,7 +4076,7 @@ local function cluster_sprites()
           
         elseif clusterspr_number == 7 then -- 	Reappearing Boo
         
-          reappearing_boo_counter = reappearing_boo_counter or u8(WRAM.reappearing_boo_counter)
+          reappearing_boo_counter = reappearing_boo_counter or mem(u8, WRAM.reappearing_boo_counter)
           invencibility_hitbox = (reappearing_boo_counter > 0xde) or (reappearing_boo_counter < 0x3f)
           special_info = " " .. reappearing_boo_counter
           
@@ -4100,16 +4112,16 @@ local function minor_extended_sprites()
   local counter = 0
   
   for id = 0, SMW.minor_extended_sprite_max - 1 do -- minor_extended_sprite_max = 12
-    local minorspr_number = u8(WRAM.minorspr_number + id)
+    local minorspr_number = mem(u8, WRAM.minorspr_number, id)
 
     if minorspr_number ~= 0 then
       -- Read WRAM addresses
-      local x = luap.signed16(256*u8(WRAM.minorspr_x_high + id) + u8(WRAM.minorspr_x_low + id))
-      local y = luap.signed16(256*u8(WRAM.minorspr_y_high + id) + u8(WRAM.minorspr_y_low + id))
-      local x_speed, y_speed = s8(WRAM.minorspr_xspeed + id), s8(WRAM.minorspr_yspeed + id)
-      local x_speed_u, y_speed_u = u8(WRAM.minorspr_xspeed + id), u8(WRAM.minorspr_yspeed + id)
-      local x_sub, y_sub = u8(WRAM.minorspr_x_sub + id), u8(WRAM.minorspr_y_sub + id)
-      local timer = u8(WRAM.minorspr_timer + id)
+      local x = luap.signed16(256*mem(u8, WRAM.minorspr_x_high, id) + mem(u8, WRAM.minorspr_x_low, id))
+      local y = luap.signed16(256*mem(u8, WRAM.minorspr_y_high, id) + mem(u8, WRAM.minorspr_y_low, id))
+      local x_speed, y_speed = mem(s8, WRAM.minorspr_xspeed, id), mem(s8, WRAM.minorspr_yspeed, id)
+      local x_speed_u, y_speed_u = mem(u8, WRAM.minorspr_xspeed, id), mem(u8, WRAM.minorspr_yspeed, id)
+      local x_sub, y_sub = mem(u8, WRAM.minorspr_x_sub, id), mem(u8, WRAM.minorspr_y_sub, id)
+      local timer = mem(u8, WRAM.minorspr_timer, id)
 
       -- Only sprites 1 and 10 use the higher byte
       local x_screen, y_screen = screen_coordinates(x, y, Camera_x, Camera_y)
@@ -4156,15 +4168,15 @@ local function bounce_sprite_info()
   
   local counter = 0
 
-  local stop_id = (u8(WRAM.bouncespr_last_id) - 1)%SMW.bounce_sprite_max
+  local stop_id = (mem(u8, WRAM.bouncespr_last_id) - 1)%SMW.bounce_sprite_max
   for id = 0, SMW.bounce_sprite_max - 1 do -- bounce_sprite_max = 4
-    local bounce_sprite_number = u8(WRAM.bouncespr_number + id)
+    local bounce_sprite_number = mem(u8, WRAM.bouncespr_number, id)
     if bounce_sprite_number ~= 0 then
     
       -- Read WRAM addresses
-      local x = luap.signed16(256*u8(WRAM.bouncespr_x_high + id) + u8(WRAM.bouncespr_x_low + id))
-      local y = luap.signed16(256*u8(WRAM.bouncespr_y_high + id) + u8(WRAM.bouncespr_y_low + id))
-      local bounce_timer = u8(WRAM.bouncespr_timer + id)
+      local x = luap.signed16(256*mem(u8, WRAM.bouncespr_x_high, id) + mem(u8, WRAM.bouncespr_x_low, id))
+      local y = luap.signed16(256*mem(u8, WRAM.bouncespr_y_high, id) + mem(u8, WRAM.bouncespr_y_low, id))
+      local bounce_timer = mem(u8, WRAM.bouncespr_timer, id)
 
       -- Reduction of useless info
       local special_info = ""
@@ -4181,7 +4193,7 @@ local function bounce_sprite_info()
 
       -- Turn blocks
       if bounce_sprite_number == 7 then
-        turn_block_timer = u8(WRAM.turn_block_timer + id)
+        turn_block_timer = mem(u8, WRAM.turn_block_timer, id)
         draw.text(x_screen, y_screen + height, turn_block_timer, color, false, false, 0.5)
         if OPTIONS.display_debug_bounce_sprite then
           special_info = fmt(" (%d, %d)", bounce_timer, turn_block_timer)
@@ -4213,15 +4225,15 @@ local function quake_sprite_info()
   
   local hitbox_tab = SMW.hitbox_quake_sprite
   for id = 0, 3 do
-    local sprite_number = u8(WRAM.quakespr_number + id)
+    local sprite_number = mem(u8, WRAM.quakespr_number, id)
     local hitbox = hitbox_tab[sprite_number]
 
     if hitbox then
       
       -- Read WRAM addresses
-      local x = luap.signed16(256*u8(WRAM.quakespr_x_high + id) + u8(WRAM.quakespr_x_low + id))
-      local y = luap.signed16(256*u8(WRAM.quakespr_y_high + id) + u8(WRAM.quakespr_y_low + id))
-      local quake_timer = u8(WRAM.quakespr_timer + id)
+      local x = luap.signed16(256*mem(u8, WRAM.quakespr_x_high, id) + mem(u8, WRAM.quakespr_x_low, id))
+      local y = luap.signed16(256*mem(u8, WRAM.quakespr_y_high, id) + mem(u8, WRAM.quakespr_y_low, id))
+      local quake_timer = mem(u8, WRAM.quakespr_timer, id)
       local interact = quake_timer < 3 and COLOUR.quake_sprite_bg or 0
       
       -- Draw the hitbox
@@ -4246,33 +4258,33 @@ local function scan_sprite_info(lua_table, slot)
   local t = lua_table[slot]
   if not t then error"Wrong Sprite table" end
 
-  t.status = u8(WRAM.sprite_status + slot)
+  t.status = mem(u8, WRAM.sprite_status, slot)
   if t.status == 0 then
     return -- returns if the slot is empty
   end
 
-  local x = 256*u8(WRAM.sprite_x_high + slot) + u8(WRAM.sprite_x_low + slot)
-  local y = 256*u8(WRAM.sprite_y_high + slot) + u8(WRAM.sprite_y_low + slot)
-  t.x_sub = u8(WRAM.sprite_x_sub + slot)
-  t.y_sub = u8(WRAM.sprite_y_sub + slot)
-  t.number = u8(WRAM.sprite_number + slot)
-  t.stun = u8(WRAM.sprite_stun_timer + slot)
-  t.x_speed = s8(WRAM.sprite_x_speed + slot)
-  t.y_speed = s8(WRAM.sprite_y_speed + slot)
-  t.contact_mario = u8(WRAM.sprite_player_contact + slot)
-  t.underwater = u8(WRAM.sprite_underwater + slot)
-  t.x_offscreen = s8(WRAM.sprite_x_offscreen + slot)
-  t.y_offscreen = s8(WRAM.sprite_y_offscreen + slot)
+  local x = 256*mem(u8, WRAM.sprite_x_high, slot) + mem(u8, WRAM.sprite_x_low, slot)
+  local y = 256*mem(u8, WRAM.sprite_y_high, slot) + mem(u8, WRAM.sprite_y_low, slot)
+  t.x_sub = mem(u8, WRAM.sprite_x_sub, slot)
+  t.y_sub = mem(u8, WRAM.sprite_y_sub, slot)
+  t.number = mem(u8, WRAM.sprite_number, slot)
+  t.stun = mem(u8, WRAM.sprite_stun_timer, slot)
+  t.x_speed = mem(s8, WRAM.sprite_x_speed, slot)
+  t.y_speed = mem(s8, WRAM.sprite_y_speed, slot)
+  t.contact_mario = mem(u8, WRAM.sprite_player_contact, slot)
+  t.underwater = mem(u8, WRAM.sprite_underwater, slot)
+  t.x_offscreen = mem(s8, WRAM.sprite_x_offscreen, slot)
+  t.y_offscreen = mem(s8, WRAM.sprite_y_offscreen, slot)
 
   -- Transform some read values into intelligible content
   t.x = luap.signed16(x)
   t.y = luap.signed16(y)
   t.x_screen, t.y_screen = screen_coordinates(t.x, t.y, Camera_x, Camera_y)
 
-  t.oscillation_flag = bit.test(u8(WRAM.sprite_4_tweaker + slot), 5) or SMW.oscillation_sprites[t.number]
+  t.oscillation_flag = bit.test(mem(u8, WRAM.sprite_4_tweaker, slot), 5) or SMW.oscillation_sprites[t.number]
 
   -- Sprite clipping vs mario and sprites
-  local boxid = bit.band(u8(WRAM.sprite_2_tweaker + slot), 0x3f)  -- This is the type of box of the sprite
+  local boxid = bit.band(mem(u8, WRAM.sprite_2_tweaker, slot), 0x3f)  -- This is the type of box of the sprite
   t.hitbox_id = boxid
   t.hitbox_xoff = SMW.hitbox_sprite[boxid].xoff
   t.hitbox_yoff = SMW.hitbox_sprite[boxid].yoff
@@ -4280,7 +4292,7 @@ local function scan_sprite_info(lua_table, slot)
   t.hitbox_height = SMW.hitbox_sprite[boxid].height
 
   -- Sprite clipping vs objects
-  local clip_obj = bit.band(u8(WRAM.sprite_1_tweaker + slot), 0xf)  -- type of hitbox for blocks
+  local clip_obj = bit.band(mem(u8, WRAM.sprite_1_tweaker, slot), 0xf)  -- type of hitbox for blocks
   t.clipping_id = clip_obj
   t.xpt_right = SMW.obj_clipping_sprite[clip_obj].xright
   t.ypt_right = SMW.obj_clipping_sprite[clip_obj].yright
@@ -4364,9 +4376,9 @@ local function draw_sprite_hitbox(slot)
 
   -- Display sprite vs sprite hitbox
   if OPTIONS.display_sprite_vs_sprite_hitbox then
-    if u8(WRAM.sprite_sprite_contact + slot) == 0 and u8(WRAM.sprite_being_eaten_flag + slot) == 0 and not bit.test(u8(WRAM.sprite_5_tweaker + slot), 3) then
+    if mem(u8, WRAM.sprite_sprite_contact, slot) == 0 and mem(u8, WRAM.sprite_being_eaten_flag, slot) == 0 and not bit.test(mem(u8, WRAM.sprite_5_tweaker, slot), 3) then
 
-      local boxid2 = bit.band(u8(WRAM.sprite_2_tweaker + slot), 0x0f)
+      local boxid2 = bit.band(mem(u8, WRAM.sprite_2_tweaker, slot), 0x0f)
       local yoff2 = boxid2 == 0 and 2 or 0xa  -- ROM data
       local bg_color = t.status >= 8 and 0x80ffffff or 0x80ff0000
       if Real_frame%2 == 0 then bg_color = 0x80808080 end
@@ -4446,27 +4458,27 @@ local function sprite_tweaker_editor(slot)
   local x_ini, y_ini = draw.AR_x*t.sprite_middle - 4*width, draw.AR_y*(y_screen + yoff) - 7*height
   local x_txt, y_txt = x_ini, y_ini
 
-  local tweaker_1 = u8(WRAM.sprite_1_tweaker + slot)
+  local tweaker_1 = mem(u8, WRAM.sprite_1_tweaker, slot)
   draw.over_text(x_txt, y_txt, tweaker_1, "sSjJcccc", COLOUR.weak, info_color)
   y_txt = y_txt + height
 
-  local tweaker_2 = u8(WRAM.sprite_2_tweaker + slot)
+  local tweaker_2 = mem(u8, WRAM.sprite_2_tweaker, slot)
   draw.over_text(x_txt, y_txt, tweaker_2, "dscccccc", COLOUR.weak, info_color)
   y_txt = y_txt + height
 
-  local tweaker_3 = u8(WRAM.sprite_3_tweaker + slot)
+  local tweaker_3 = mem(u8, WRAM.sprite_3_tweaker, slot)
   draw.over_text(x_txt, y_txt, tweaker_3, "lwcfpppg", COLOUR.weak, info_color)
   y_txt = y_txt + height
 
-  local tweaker_4 = u8(WRAM.sprite_4_tweaker + slot)
+  local tweaker_4 = mem(u8, WRAM.sprite_4_tweaker, slot)
   draw.over_text(x_txt, y_txt, tweaker_4, "dpmksPiS", COLOUR.weak, info_color)
   y_txt = y_txt + height
 
-  local tweaker_5 = u8(WRAM.sprite_5_tweaker + slot)
+  local tweaker_5 = mem(u8, WRAM.sprite_5_tweaker, slot)
   draw.over_text(x_txt, y_txt, tweaker_5, "dnctswye", COLOUR.weak, info_color)
   y_txt = y_txt + height
 
-  local tweaker_6 = u8(WRAM.sprite_6_tweaker + slot)
+  local tweaker_6 = mem(u8, WRAM.sprite_6_tweaker, slot)
   draw.over_text(x_txt, y_txt, tweaker_6, "wcdj5sDp", COLOUR.weak, info_color)
 end
 
@@ -4485,24 +4497,24 @@ PROBLEMATIC ONES
 --]]
 
 special_sprite_property[0x1e] = function(slot) -- Lakitu
-  if u8(WRAM.sprite_misc_151c + slot) ~= 0 or
-  u8(WRAM.sprite_horizontal_direction + slot) ~= 0 then
+  if mem(u8, WRAM.sprite_misc_151c, slot) ~= 0 or
+  mem(u8, WRAM.sprite_horizontal_direction, slot) ~= 0 then
 
     local OAM_index = 0x3C -- 0xec in vanilla?
-    local xoff = u8(0x304 + OAM_index) - 0x0c -- lots of unlisted WRAM
-    local yoff = u8(0x305 + OAM_index) - 0x0c
+    local xoff = mem(u8, 0x304, OAM_index) - 0x0c -- lots of unlisted WRAM
+    local yoff = mem(u8, 0x305, OAM_index) - 0x0c
     local width, height = 0x18 - 1, 0x18 - 1  -- instruction BCS
 
     print(xoff, yoff, width, height, COLOUR.awkward_hitbox, COLOUR.awkward_hitbox_bg)
     draw.rectangle(xoff, yoff, width, height, COLOUR.awkward_hitbox, COLOUR.awkward_hitbox_bg)
     -- TODO: 0x7e and 0x80 are too important
     -- draw this point outside this function and add an option
-    draw.pixel(s16(0x7e), s16(0x80), COLOUR.mario)
+    draw.pixel(mem(s16, 0x7e), mem(s16, 0x80), COLOUR.mario)
   end
 end
 
 special_sprite_property[0x3d] = function(slot) -- Rip Van Fish
-  if u8(WRAM.sprite_phase + slot) == 0 then -- if sleeping
+  if mem(u8, WRAM.sprite_phase, slot) == 0 then -- if sleeping
     local x_screen = Sprites_info[slot].x_screen
     local y_screen = Sprites_info[slot].y_screen
     local color = Sprites_info[slot].info_color
@@ -4523,17 +4535,17 @@ end
 
 special_sprite_property[0x5f] = function(slot) -- Swinging brown platform (TODO fix it)
   --[[ TEST
-  gui.text(0, 200, u8(0x4216))
+  gui.text(0, 200, mem(u8, 0x4216))
 
-  local px = u16(0x14b8)
-  local py = u16(0x14ba)
+  local px = mem(u16, 0x14b8)
+  local py = mem(u16, 0x14ba)
   gui.text(0, 0, px.. ", ".. py, 'white', 'blue')
   local sx, sy = screen_coordinates(px, py, Camera_x, Camera_y)
   draw.rectangle(sx, sy, 2, 2)
-  local table1 = s8(0x1504 + id) -- speed
-  local table2 = u8(0x1510 + id) -- subpixle?
-  local table3 = u8(0x151c + id)
-  local table4 = u8(0x1528 + id) -- numero de voltas horario
+  local table1 = mem(s8, 0x1504, id) -- speed
+  local table2 = mem(u8, 0x1510, id) -- subpixle?
+  local table3 = mem(u8, 0x151c, id)
+  local table4 = mem(u8, 0x1528, id) -- numero de voltas horario
   draw.text(0, 16, string.format("Tables: %4d, %4d.%x, %4d", table1, table3, table2>>4, table4))
 
   local is_up = table4%2 == 0 and 256 or 0
@@ -4633,7 +4645,7 @@ special_sprite_property[0x6b] = function(slot) -- Wall springboard (left wall)
   draw.rectangle(x_screen + xoff, y_screen + yoff, sprite_width, sprite_height, COLOUR.sprites_faint)
 
   -- Mario's image
-  local xmario, ymario = u16(0x7e), u16(0x80)
+  local xmario, ymario = mem(u16, 0x7e), mem(u16, 0x80)
   if floor(xmario/256) == 0 and floor(ymario/256) == 0 then
     local y1 = 0x08 + 0x08 + (Yoshi_riding_flag and 0x10 or 0)
     local y2 = 0x21 + (Yoshi_riding_flag and 0x10 or 0) + (Player_powerup == 0 and 2 or 0)
@@ -4642,10 +4654,10 @@ special_sprite_property[0x6b] = function(slot) -- Wall springboard (left wall)
 
   -- Spheres hitbox
   if t.x_offscreen == 0 and t.y_offscreen == 0 then
-    local OAM_index = u8(WRAM.sprite_OAM_index + slot)
+    local OAM_index = mem(u8, WRAM.sprite_OAM_index, slot)
     for ball = 0, 4 do
-      local x = u8(0x300 + OAM_index + 4*ball)
-      local y = u8(0x301 + OAM_index + 4*ball)
+      local x = mem(u8, 0x300, OAM_index, 4*ball)
+      local y = mem(u8, 0x301, OAM_index, 4*ball)
 
       draw.rectangle(x, y, 8, 8, color, COLOUR.sprites_bg)
       draw.text(draw.AR_x*(x + 2), draw.AR_y*(y + 2), ball, COLOUR.text)
@@ -4659,15 +4671,15 @@ special_sprite_property[0x6f] = function(slot) -- Dino-Torch: display flame hitb
   local t = Sprites_info[slot]
 
   if OPTIONS.display_sprite_hitbox then
-    if u8(WRAM.sprite_misc_151c + slot) == 0 then  -- if flame is hurting
+    if mem(u8, WRAM.sprite_misc_151c, slot) == 0 then  -- if flame is hurting
       local active = (Real_frame - slot)%4 == 0 and COLOUR.sprites_bg or 0
-      local vertical_flame = u8(WRAM.sprite_misc_1602 + slot) == 3
+      local vertical_flame = mem(u8, WRAM.sprite_misc_1602, slot) == 3
       local xoff, yoff, width, height
 
       if vertical_flame then
         xoff, yoff, width, height = 0x02, -0x24, 0x0c, 0x24
       else
-        local facing_right = u8(WRAM.sprite_horizontal_direction + slot) == 0
+        local facing_right = mem(u8, WRAM.sprite_horizontal_direction, slot) == 0
         xoff = facing_right and 0x10 or -0x24
         yoff = 0x02
         width, height = 0x24, 0x0c
@@ -4687,8 +4699,8 @@ special_sprite_property[0x7b] = function(slot) -- Goal Tape
   draw.Bg_opacity = 0.6
 
   -- This draws the effective area of a goal tape
-  local x_effective = 256*u8(WRAM.sprite_misc_151c + slot) + u8(WRAM.sprite_phase + slot)
-  local y_low = 256*u8(WRAM.sprite_misc_1534 + slot) + u8(WRAM.sprite_misc_1528 + slot)
+  local x_effective = 256*mem(u8, WRAM.sprite_misc_151c, slot) + mem(u8, WRAM.sprite_phase, slot)
+  local y_low = 256*mem(u8, WRAM.sprite_misc_1534, slot) + mem(u8, WRAM.sprite_misc_1528, slot)
   local _, y_high = screen_coordinates(0, 0, Camera_x, Camera_y)
   local x_s, y_s = screen_coordinates(x_effective, y_low, Camera_x, Camera_y)
 
@@ -4699,10 +4711,10 @@ special_sprite_property[0x7b] = function(slot) -- Goal Tape
 end
 
 special_sprite_property[0x86] = function(slot) -- Wiggler (segments)
-  local OAM_index = u8(WRAM.sprite_OAM_index + slot)
+  local OAM_index = mem(u8, WRAM.sprite_OAM_index, slot)
   for seg = 0, 4 do
-    local xoff = u8(0x304 + OAM_index) - 0x0a -- lots of unlisted WRAM
-    local yoff = u8(0x305 + OAM_index) - 0x1b
+    local xoff = mem(u8, 0x304, OAM_index) - 0x0a -- lots of unlisted WRAM
+    local yoff = mem(u8, 0x305, OAM_index) - 0x1b
     if Yoshi_riding_flag then yoff = yoff - 0x10 end
     local width, height = 0x17 - 1, 0x17
     local xend, yend = xoff + width, yoff + height
@@ -4714,14 +4726,14 @@ special_sprite_property[0x86] = function(slot) -- Wiggler (segments)
     OAM_index = OAM_index + 4
   end
 
-  draw.pixel(s16(0x7e), s16(0x80), COLOUR.mario, 0x80000000)
+  draw.pixel(mem(s16, 0x7e), mem(s16, 0x80), COLOUR.mario, 0x80000000)
 end
 
 special_sprite_property[0xa9] = function(slot) -- Reznor
   local reznor
   local color
   for index = 0, SMW.sprite_max - 1 do -- sprite_max = 12
-    reznor = u8(WRAM.sprite_misc_151c + index)
+    reznor = mem(u8, WRAM.sprite_misc_151c, index)
     if index >= 4 and index <= 7 then
       color = COLOUR.warning
     else
@@ -4735,15 +4747,15 @@ special_sprite_property[0x91] = function(slot) -- Chargin' Chuck
   if Sprites_info[slot].status ~= 0x08 then return end
 
   -- > spriteYLow - addr1 <= MarioYLow < spriteYLow + addr2 - addr1
-  local routine_pointer = u8(WRAM.sprite_phase + slot)
+  local routine_pointer = mem(u8, WRAM.sprite_phase, slot)
   routine_pointer = floor(bit.band(routine_pointer, 0xff)/2)
-  local facing_right = u8(WRAM.sprite_horizontal_direction + slot) == 0
+  local facing_right = mem(u8, WRAM.sprite_horizontal_direction, slot) == 0
 
   local x1, x2, y1, yoff, height
   local color, bg
 
   if routine_pointer == 0 then -- looking
-    local active = bit.band(u8(WRAM.sprite_stun_timer + slot), 0x0f) == 0
+    local active = bit.band(mem(u8, WRAM.sprite_stun_timer, slot), 0x0f) == 0
     color = COLOUR.sprite_vision_passive
     bg = active and COLOUR.sprite_vision_active_bg or 0
     yoff = -0x28
@@ -4778,7 +4790,7 @@ end
 
 special_sprite_property[0x92] = function(slot) -- Splittin' Chuck
   if Sprites_info[slot].status ~= 0x08 then return end
-  if u8(WRAM.sprite_phase + slot) ~= 5 then return end
+  if mem(u8, WRAM.sprite_phase, slot) ~= 5 then return end
 
   local xoff = -0x50
   local width = 0xa0 - 1
@@ -4795,7 +4807,7 @@ special_sprite_property[0xa0] = function(slot) -- Bowser
   local height = BIZHAWK_FONT_HEIGHT
   local y_text = draw.Buffer_height - 10*height
   for index = 0, 9 do
-    local value = u8(WRAM.bowser_attack_timers + index)
+    local value = mem(u8, WRAM.bowser_attack_timers, index)
     draw.text(draw.Buffer_width + draw.Border_right, y_text + index*height,
       fmt("%$2X = %3d", value, value), Sprites_info[slot].info_color, true)
   end
@@ -4805,8 +4817,8 @@ special_sprite_property[0xae] = function(slot) -- Fishin' Boo
   if OPTIONS.display_sprite_hitbox then
     local x_screen = Sprites_info[slot].x_screen
     local y_screen = Sprites_info[slot].y_screen
-    local direction = u8(WRAM.sprite_horizontal_direction + slot)
-    local aux = u8(WRAM.sprite_misc_1602 + slot)
+    local direction = mem(u8, WRAM.sprite_horizontal_direction, slot)
+    local aux = mem(u8, WRAM.sprite_misc_1602, slot)
     local index = 2*direction + aux
     local offsets = {[0] = 0x1a, 0x14, -0x12, -0x08}
     local xoff = offsets[index]
@@ -4828,7 +4840,7 @@ special_sprite_property[0xBC] = function(slot) -- Bowser Statue
     local y_screen = Sprites_info[slot].y_screen
     local info_color = Sprites_info[slot].info_color
     
-    local statue_type = u8(WRAM.sprite_phase + slot)
+    local statue_type = mem(u8, WRAM.sprite_phase, slot)
     
     if statue_type < 2 then -- Fire-spitting statue
         --[[
@@ -4909,7 +4921,7 @@ local function sprite_info(id, counter, table_position)
   if OPTIONS.display_sprite_info then
     draw.text(draw.AR_x*sprite_middle, draw.AR_y*sprite_top, fmt("#%.2d%s", id, contact_str), info_color, true, false, 0.5, 1.0)
     if Player_powerup == 2 then
-      local contact_cape = u8(WRAM.sprite_disable_cape + id)
+      local contact_cape = mem(u8, WRAM.sprite_disable_cape, id)
       if contact_cape ~= 0 then
         draw.text(draw.AR_x*sprite_middle, draw.AR_y*sprite_top - 2*BIZHAWK_FONT_HEIGHT, contact_cape, COLOUR.cape, true)
       end
@@ -4921,8 +4933,8 @@ local function sprite_info(id, counter, table_position)
 
   -- The sprite table:
   if OPTIONS.display_sprite_main_table then
-    local x_speed_u = u8(WRAM.sprite_x_speed + id) -- used to print a proper hex value
-    local y_speed_u = u8(WRAM.sprite_y_speed + id) -- used to print a proper hex value
+    local x_speed_u = mem(u8, WRAM.sprite_x_speed, id) -- used to print a proper hex value
+    local y_speed_u = mem(u8, WRAM.sprite_y_speed, id) -- used to print a proper hex value
     local x_speed_water = ""
     if underwater ~= 0 then  -- if sprite is underwater
       local correction = floor(3*floor(x_speed/2)/2)
@@ -4957,7 +4969,7 @@ local function sprite_info(id, counter, table_position)
     local t = OPTIONS.miscellaneous_sprite_table_number
     local misc, text = nil, fmt("#%.2d", id)
     for num = 1, 19 do
-      misc = u8(WRAM["sprite_miscellaneous" .. num] + id) or false
+      misc = mem(u8, WRAM["sprite_miscellaneous" .. num], id) or false
       text = misc and fmt("%s %3d", text, misc) or text
     end
 
@@ -4981,8 +4993,8 @@ local function sprites()
   -- Font
   draw.Text_opacity = 0.6
 
-  local swap_slot = u8(WRAM.sprite_swap_slot)
-  local smh = u8(WRAM.sprite_memory_header)
+  local swap_slot = mem(u8, WRAM.sprite_swap_slot)
+  local smh = mem(u8, WRAM.sprite_memory_header)
   draw.text(draw.Buffer_width + draw.Border_right, table_position - 2*BIZHAWK_FONT_HEIGHT, fmt("Sprites: %d", counter), COLOUR.weak, true)
   draw.text(draw.Buffer_width + draw.Border_right, table_position - BIZHAWK_FONT_HEIGHT, fmt("1st div: %d. Swap: %d",
                                     SMW.sprite_memory_max[smh] or 0, swap_slot), COLOUR.weak, true)
@@ -5034,20 +5046,20 @@ local function yoshi()
 
   local yoshi_id = get_yoshi_id()
   if yoshi_id ~= nil then
-    local tongue_len = u8(WRAM.sprite_misc_151c + yoshi_id)
-    local tongue_timer = u8(WRAM.sprite_misc_1558 + yoshi_id)
-    local yoshi_direction = u8(WRAM.sprite_horizontal_direction + yoshi_id)
-    local tongue_out = u8(WRAM.sprite_misc_1594 + yoshi_id)
-    local turn_around = u8(WRAM.sprite_misc_15ac + yoshi_id)
-    local tile_index = u8(WRAM.sprite_misc_1602 + yoshi_id)
-    local eat_id = u8(WRAM.sprite_misc_160e + yoshi_id)
-    local mount_invisibility = u8(WRAM.sprite_misc_163e + yoshi_id)
-    local eat_type = u8(WRAM.sprite_number + eat_id)
-    local tongue_wait = u8(WRAM.sprite_tongue_wait)
-    local tongue_height = u8(WRAM.yoshi_tile_pos)
-    local yoshi_in_pipe = u8(WRAM.yoshi_in_pipe)
-    local wings_timer = u8(WRAM.cape_fall)
-    local has_wings = u8(0x1410) == 0x02
+    local tongue_len = mem(u8, WRAM.sprite_misc_151c, yoshi_id)
+    local tongue_timer = mem(u8, WRAM.sprite_misc_1558, yoshi_id)
+    local yoshi_direction = mem(u8, WRAM.sprite_horizontal_direction, yoshi_id)
+    local tongue_out = mem(u8, WRAM.sprite_misc_1594, yoshi_id)
+    local turn_around = mem(u8, WRAM.sprite_misc_15ac, yoshi_id)
+    local tile_index = mem(u8, WRAM.sprite_misc_1602, yoshi_id)
+    local eat_id = mem(u8, WRAM.sprite_misc_160e, yoshi_id)
+    local mount_invisibility = mem(u8, WRAM.sprite_misc_163e, yoshi_id)
+    local eat_type = mem(u8, WRAM.sprite_number, eat_id)
+    local tongue_wait = mem(u8, WRAM.sprite_tongue_wait)
+    local tongue_height = mem(u8, WRAM.yoshi_tile_pos)
+    local yoshi_in_pipe = mem(u8, WRAM.yoshi_in_pipe)
+    local wings_timer = mem(u8, WRAM.cape_fall)
+    local has_wings = mem(u8, 0x1410) == 0x02
     local yoshi_offscreen = Sprites_info[yoshi_id].x_offscreen ~= 0 or Sprites_info[yoshi_id].y_offscreen
 
     local eat_type_str = eat_id == SMW.null_sprite_id and "-" or string.format("%02X", eat_type)
@@ -5070,8 +5082,8 @@ local function yoshi()
     end
     
     -- more WRAM values
-    local yoshi_x = 256*s8(WRAM.sprite_x_high + yoshi_id) + u8(WRAM.sprite_x_low + yoshi_id)
-    local yoshi_y = 256*s8(WRAM.sprite_y_high + yoshi_id) + u8(WRAM.sprite_y_low + yoshi_id)
+    local yoshi_x = 256*mem(s8, WRAM.sprite_x_high, yoshi_id) + mem(u8, WRAM.sprite_x_low, yoshi_id)
+    local yoshi_y = 256*mem(s8, WRAM.sprite_y_high, yoshi_id) + mem(u8, WRAM.sprite_y_low, yoshi_id)
     local x_screen, y_screen = screen_coordinates(yoshi_x, yoshi_y, Camera_x, Camera_y)
 
     -- invisibility timer
@@ -5093,7 +5105,7 @@ local function yoshi()
       -- Tongue Hitbox
       local actual_index = tile_index
       if yoshi_direction == 0 then actual_index = tile_index + 8 end
-      actual_index = yoshi_in_pipe ~= 0 and u8(0x0d) or SMW.yoshi_tongue_x_offsets[actual_index] or 0
+      actual_index = yoshi_in_pipe ~= 0 and mem(u8, 0x0d) or SMW.yoshi_tongue_x_offsets[actual_index] or 0
 
       local xoff = special_sprite_property.yoshi_tongue_offset(actual_index, tongue_len)
 
@@ -5108,20 +5120,20 @@ local function yoshi()
         local xoff = special_sprite_property.yoshi_tongue_offset(0x40, tongue_len) -- from ROM
         draw.rectangle(x_screen + xoff, y_screen + yoff, 8, 4, 0x80ffffff, 0x40000000)
 
-        draw.text(x_text, y_text + 3*h, fmt("$1a: %.4x $1c: %.4x", u16(WRAM.layer1_x_mirror), u16(WRAM.layer1_y_mirror)), COLOUR.yoshi)
-        draw.text(x_text, y_text + 4*h, fmt("$4d: %.4x $4f: %.4x", u16(WRAM.layer1_VRAM_left_up), u16(WRAM.layer1_VRAM_right_down)), COLOUR.yoshi)
+        draw.text(x_text, y_text + 3*h, fmt("$1a: %.4x $1c: %.4x", mem(u16, WRAM.layer1_x_mirror), mem(u16, WRAM.layer1_y_mirror)), COLOUR.yoshi)
+        draw.text(x_text, y_text + 4*h, fmt("$4d: %.4x $4f: %.4x", mem(u16, WRAM.layer1_VRAM_left_up), mem(u16, WRAM.layer1_VRAM_right_down)), COLOUR.yoshi)
       end
       -- glitched hitbox for offscreen yoshi
       if yoshi_offscreen ~= 0 then
         -- a weird way of detecting wether tiles were uploaded to VRAM, but seems to work ok.
-        local tongue_is_long = u8(0x18187)
+        local tongue_is_long = mem(u8, 0x18187)
         -- short tongue
         local xoff_os = special_sprite_property.yoshi_tongue_offset(0x00, tongue_len) + 1
         local yoff_os = tile_index + 2
         local colour_os = tongue_is_long ~= 0 and COLOUR.tongue_line_inactive or COLOUR.tongue_line
         draw.rectangle(x_screen + xoff_os, y_screen + yoff_os, 8, 4, colour_os, 0x40000000)
         -- long tongue
-        local level_mode = u8(WRAM.level_mode_settings)
+        local level_mode = mem(u8, WRAM.level_mode_settings)
         local clobbered_0d = memory.read_u8(0x3E28 + 2*level_mode, ROM_domain)
         xoff_os = special_sprite_property.yoshi_tongue_offset(clobbered_0d, tongue_len)
         yoff_os = tile_index + 2
@@ -5141,13 +5153,13 @@ end
 local function display_fadeout_timers()
   if not OPTIONS.display_counters then return end
 
-  local end_level_timer = u8(WRAM.end_level_timer)
+  local end_level_timer = mem(u8, WRAM.end_level_timer)
   if end_level_timer == 0 then return end
 
   -- Load
-  local peace_image_timer = u8(WRAM.peace_image_timer)
-  local fadeout_radius = u8(WRAM.fadeout_radius)
-  local zero_subspeed = u8(WRAM.x_subspeed) == 0
+  local peace_image_timer = mem(u8, WRAM.peace_image_timer)
+  local fadeout_radius = mem(u8, WRAM.fadeout_radius)
+  local zero_subspeed = mem(u8, WRAM.x_subspeed) == 0
 
   -- Display
   local height = BIZHAWK_FONT_HEIGHT
@@ -5174,26 +5186,26 @@ local function show_counters()
   local height = BIZHAWK_FONT_HEIGHT
   local text_counter = 0
 
-  local pipe_entrance_timer = u8(WRAM.pipe_entrance_timer)
-  local multicoin_block_timer = u8(WRAM.multicoin_block_timer)
-  local gray_pow_timer = u8(WRAM.gray_pow_timer)
-  local blue_pow_timer = u8(WRAM.blue_pow_timer)
-  local dircoin_timer = u8(WRAM.dircoin_timer)
-  local pballoon_timer = u8(WRAM.pballoon_timer)
-  local star_timer = u8(WRAM.star_timer)
-  local invisibility_timer = u8(WRAM.invisibility_timer)
-  local animation_timer = u8(WRAM.animation_timer)
-  local fireflower_timer = u8(WRAM.fireflower_timer)
-  local yoshi_timer = u8(WRAM.yoshi_timer)
-  local swallow_timer = u8(WRAM.swallow_timer)
-  local lakitu_timer = u8(WRAM.lakitu_timer)
-  local score_incrementing = u8(WRAM.score_incrementing)
-  local pause_timer = u8(WRAM.pause_timer)
-  local bonus_timer = u8(WRAM.bonus_timer)
-  local disappearing_sprites_timer = u8(WRAM.disappearing_sprites_timer)
-  local message_box_timer = floor(u8(WRAM.message_box_timer)/4)
-  local game_intro_timer = u8(WRAM.game_intro_timer)
-  local scroll_timer = u8(WRAM.camera_scroll_timer)
+  local pipe_entrance_timer = mem(u8, WRAM.pipe_entrance_timer)
+  local multicoin_block_timer = mem(u8, WRAM.multicoin_block_timer)
+  local gray_pow_timer = mem(u8, WRAM.gray_pow_timer)
+  local blue_pow_timer = mem(u8, WRAM.blue_pow_timer)
+  local dircoin_timer = mem(u8, WRAM.dircoin_timer)
+  local pballoon_timer = mem(u8, WRAM.pballoon_timer)
+  local star_timer = mem(u8, WRAM.star_timer)
+  local invisibility_timer = mem(u8, WRAM.invisibility_timer)
+  local animation_timer = mem(u8, WRAM.animation_timer)
+  local fireflower_timer = mem(u8, WRAM.fireflower_timer)
+  local yoshi_timer = mem(u8, WRAM.yoshi_timer)
+  local swallow_timer = mem(u8, WRAM.swallow_timer)
+  local lakitu_timer = mem(u8, WRAM.lakitu_timer)
+  local score_incrementing = mem(u8, WRAM.score_incrementing)
+  local pause_timer = mem(u8, WRAM.pause_timer)
+  local bonus_timer = mem(u8, WRAM.bonus_timer)
+  local disappearing_sprites_timer = mem(u8, WRAM.disappearing_sprites_timer)
+  local message_box_timer = floor(mem(u8, WRAM.message_box_timer)/4)
+  local game_intro_timer = mem(u8, WRAM.game_intro_timer)
+  local scroll_timer = mem(u8, WRAM.camera_scroll_timer)
   
   local display_counter = function(label, value, default, mult, frame, color)
     if value == default then return end
@@ -5285,8 +5297,8 @@ local function overworld_mode()
   local y_text = BIZHAWK_FONT_HEIGHT
 
   -- OW camera (Note: the script uses $7E1462 and $7E1464 (layer 1 position next frame) for Camera_x and Camera_y, but the OW doesn't use these addresses)
-  local OW_camera_x = s16(WRAM.layer1_x_mirror)
-  local OW_camera_y = s16(WRAM.layer1_y_mirror)
+  local OW_camera_x = mem(s16, WRAM.layer1_x_mirror)
+  local OW_camera_y = mem(s16, WRAM.layer1_y_mirror)
   
   -- Real frame modulo 8
   local real_frame_8 = Real_frame%8
@@ -5294,27 +5306,27 @@ local function overworld_mode()
   y_text = y_text + height
   
   -- Star Road info
-  local star_speed = u8(WRAM.star_road_speed)
-  local star_timer = u8(WRAM.star_road_timer)
+  local star_speed = mem(u8, WRAM.star_road_speed)
+  local star_timer = mem(u8, WRAM.star_road_timer)
   draw.text(draw.Buffer_width + draw.Border_right, y_text, fmt("Star Road(%x %x)", star_speed, star_timer), COLOUR.cape, true)
 
   -- Player's position
   local offset = 0
   if Current_character == "Luigi" then offset = 4 end
 
-  local OW_x = s16(WRAM.OW_x + offset)
-  local OW_y = s16(WRAM.OW_y + offset)
+  local OW_x = mem(s16, WRAM.OW_x, offset)
+  local OW_y = mem(s16, WRAM.OW_y, offset)
   draw.text(-draw.Border_left, y_text, fmt(OPTIONS.positions_in_hex and "Pos (%04X, %04X)" or "Pos (%d, %d)", OW_x, OW_y), true)
   y_text = y_text + 2*height
 
   -- Exit counter (events tiggered)
-  local exit_counter = u8(WRAM.exit_counter)
+  local exit_counter = mem(u8, WRAM.exit_counter)
   draw.text(-draw.Border_left, y_text, fmt("Exits: %d", exit_counter), true)
   y_text = y_text + 2*height
 
   -- Beaten exits table
   for byte_off = 0, 14 do
-    local event_flags = u8(WRAM.event_flags + byte_off) -- TODO check if reading just once and storing in table is faster (could re-read once it detects new exits)
+    local event_flags = mem(u8, WRAM.event_flags, byte_off) -- TODO check if reading just once and storing in table is faster (could re-read once it detects new exits)
 
     draw.text(-draw.Border_left, y_text + byte_off*BIZHAWK_FONT_HEIGHT*1.5, fmt("%02X %02X %02X %02X %02X %02X %02X %02X ",
       8*byte_off + 0, 8*byte_off + 1, 8*byte_off + 2, 8*byte_off + 3, 8*byte_off + 4, 8*byte_off + 5, 8*byte_off + 6, 8*byte_off + 7), COLOUR.disabled)
@@ -5337,11 +5349,11 @@ local function overworld_mode()
   local offset
   local parity256
   
-  local is_submap = u8(WRAM.current_submap + u8(WRAM.current_character)) > 0
+  local is_submap = mem(u8, WRAM.current_submap, mem(u8, WRAM.current_character)) > 0
   
   for i = 0, 0x400 - 1 do
     local address = WRAM.OW_tile_translevel + (is_submap and 0x400 or 0)
-    local level = u8(address + i) -- TODO: perhaps it's faster reading it just once and storing in a table
+    local level = mem(u8, address, i) -- TODO: perhaps it's faster reading it just once and storing in a table
     
     if level ~= 0 then -- is a valid level
       
@@ -5368,7 +5380,7 @@ local function overworld_mode()
   
   for i = 0, 0x800 - 1 do
     
-    if u8(0xD000 + i) ~= 0 then -- is a level -- TODO: unlisted ram
+    if mem(u8, 0xD000, i) ~= 0 then -- is a level -- TODO: unlisted ram
       
       parity256 = (floor(i/0x100))%2
       
@@ -5380,7 +5392,7 @@ local function overworld_mode()
       end
       
       draw.rectangle(level_x, level_y, 15, 15, COLOUR.block, 0)
-      draw.text(level_x*draw.AR_x, level_y*draw.AR_y - 10, fmt("%03X", u8(0xD000 + i)), COLOUR.text, 0)
+      draw.text(level_x*draw.AR_x, level_y*draw.AR_y - 10, fmt("%03X", mem(u8, 0xD000, i)), COLOUR.text, 0)
     end
   end
   
@@ -5399,7 +5411,7 @@ local parity
 for i = 0, 0x800 - 1 do
   parity = (floor(i/0x100))%2
   
-  table.insert(tile_table[parity], fmt("%02X ", u8(0xD000 + i)))
+  table.insert(tile_table[parity], fmt("%02X ", mem(u8, 0xD000, i)))
 end
 
 
@@ -5541,7 +5553,7 @@ end
 
 -- Called from Cheat.beat_level()
 function Cheat.activate_next_level(secret_exit)
-  if u8(WRAM.level_exit_type) == 0x80 and u8(WRAM.midway_point) == 1 then
+  if mem(u8, WRAM.level_exit_type) == 0x80 and mem(u8, WRAM.midway_point) == 1 then
     if secret_exit then
       w8(WRAM.level_exit_type, 0x2)
     else
@@ -5595,8 +5607,8 @@ function Cheat.free_movement()
   if Game_mode == SMW.game_mode_level then
   
     -- Get position and "speed"
-    local x_pos, y_pos = u16(WRAM.x), u16(WRAM.y)
-    local movement_mode = u8(WRAM.player_animation_trigger)
+    local x_pos, y_pos = mem(u16, WRAM.x), mem(u16, WRAM.y)
+    local movement_mode = mem(u8, WRAM.player_animation_trigger)
     local pixels = (Joypad["Y"] and 7) or (Joypad["X"] and 4) or 1  -- how many pixels per frame
 
     -- Interpret the movement
@@ -5612,7 +5624,7 @@ function Cheat.free_movement()
       w8(WRAM.y_speed, 0)
 
       -- animate sprites by incrementing the effective frame
-      w8(WRAM.effective_frame, (u8(WRAM.effective_frame) + 1) % 256)
+      w8(WRAM.effective_frame, (mem(u8, WRAM.effective_frame) + 1) % 256)
     else
       w8(WRAM.frozen, 0)
     end
@@ -5632,7 +5644,7 @@ function Cheat.free_movement()
     if Current_character == "Luigi" then offset = 4 end
     
     -- Get position and "speed"
-    local x_pos, y_pos = u16(WRAM.OW_x + offset), u16(WRAM.OW_y + offset)
+    local x_pos, y_pos = mem(u16, WRAM.OW_x, offset), mem(u16, WRAM.OW_y, offset)
     local pixels = 16 -- how many pixels per frame
 
     -- Interpret the movement
@@ -5645,7 +5657,7 @@ function Cheat.free_movement()
     w8(WRAM.OW_action_pointer, 3) -- #$03 = Standing still on a level tile
     
     -- Store the values
-    --if u16(WRAM.OW_x + offset) ~= x_pos
+    --if mem(u16, WRAM.OW_x, offset) ~= x_pos
     if Effective_frame % 4 == 0 then
       w16(WRAM.OW_x + offset, x_pos)
       w16(WRAM.OW_y + offset, y_pos)
@@ -5789,10 +5801,10 @@ function Pittance.record_frame()
   local movie_name = Pittance.active_movie_name
   local frame = emu.framecount()
 
-  local x = s16(WRAM.x)
-  local y = s16(WRAM.y)
+  local x = mem(s16, WRAM.x)
+  local y = mem(s16, WRAM.y)
   local powerup = Player_powerup
-  local ducking = u8(WRAM.is_ducking)
+  local ducking = mem(u8, WRAM.is_ducking)
   local yoshi = Yoshi_riding_flag and 1 or 0
   
   local A = SQL.writecommand(fmt("UPDATE inputs SET x=%d, y=%d, ducking=%d, powerup=%d, yoshi=%d WHERE movie = '%s' AND frame = %d;", x, y, ducking, powerup, yoshi, movie_name, frame))
@@ -6298,7 +6310,7 @@ function Options_form.create_window()
   forms.setproperty(Options_form.cheat_score, "Enabled", Cheat.allow_cheats)
 
   xform = xform + 45
-  Options_form.score_number = forms.textbox(Options_form.form, fmt("0x%X", u24(WRAM.mario_score)), 48, 16, nil, xform, yform + 2, false, false)
+  Options_form.score_number = forms.textbox(Options_form.form, fmt("0x%X", mem(u24, WRAM.mario_score)), 48, 16, nil, xform, yform + 2, false, false)
   forms.setproperty(Options_form.score_number, "Enabled", Cheat.allow_cheats)
 
   -- Item box cheat
@@ -6673,7 +6685,7 @@ function Sprite_tables_form.create_window()
       if i == 1 then -- to print this once per sprite table, could be any i
         forms.label(Sprite_tables_form.form, fmt("%04X", Sprite_tables_form.display[j]), xform - 6 + j*30, yform - 2*delta_y, 34, delta_y)
       end
-      Sprite_tables_form.values[i][j] = forms.label(Sprite_tables_form.form, fmt("%02X", u8(Sprite_tables_form.display[j] + i)), xform + j*30, yform, 22, delta_y)
+      Sprite_tables_form.values[i][j] = forms.label(Sprite_tables_form.form, fmt("%02X", mem(u8, Sprite_tables_form.display[j], i)), xform + j*30, yform, 22, delta_y)
       forms.setproperty(Sprite_tables_form.values[i][j], "ForeColor", Sprite_tables_form.colour_same) -- set pure black colour to be used later at Sprite_tables_form.evaluate_form()
       
     end
@@ -6786,9 +6798,9 @@ function Sprite_tables_form.evaluate_form()
     
     for j = 1, #Sprite_tables_form.display do -- j = sprite table to be displayed index
       
-      if forms.getproperty(Sprite_tables_form.values[i][j], "Text") ~= fmt("%02X", u8(Sprite_tables_form.display[j] + i)) then -- value changed in this frame
+      if forms.getproperty(Sprite_tables_form.values[i][j], "Text") ~= fmt("%02X", mem(u8, Sprite_tables_form.display[j], i)) then -- value changed in this frame
         
-        forms.settext(Sprite_tables_form.values[i][j], fmt("%02X", u8(Sprite_tables_form.display[j] + i)))
+        forms.settext(Sprite_tables_form.values[i][j], fmt("%02X", mem(u8, Sprite_tables_form.display[j], i)))
         forms.setproperty(Sprite_tables_form.values[i][j], "ForeColor", Sprite_tables_form.colour_changed)
         
       else -- value didn't change in this frame
