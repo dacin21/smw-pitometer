@@ -1724,6 +1724,12 @@ if not IS_SMW then error("\n\nThis script is only for Super Mario World (any SNE
 local HAS_SA1 = false
 if biz.map_mode_rom_type == 0x2334 or biz.map_mode_rom_type == 0x2335 then HAS_SA1 = true end -- TODO: RAM ramaps https://github.com/VitorVilela7/SA1-Pack/blob/master/docs/remap.asm
 
+if HAS_SA1 then
+  local domains = {}
+  for _, d in ipairs(memory.getmemorydomainlist()) do domains[d] = true end
+  if not domains['SA1_IRAM'] or not domains['SA1_BWRAM'] then error("This script only supports SA1 hacks in the BSNESv115+ core. Use a modern version of Bizhawk") end
+end
+
 -- Memory wrapper for easy SA-1 support
 local function mem(memory_function, location, offset)
   offset = offset == nil and 0 or offset
@@ -3255,6 +3261,9 @@ local function sprite_level_info()
   local y_origin = OPTIONS.top_gap + draw.Buffer_height - 4*11
   local x, y = x_origin, y_origin
   local w, h = 9, 11
+
+  -- Avoid lags due to garbled data while the level is loading
+  if Game_mode <= SMW.game_mode_fade_to_level + 2 then return end
 
   -- Sprite data enviroment
   local pointer = Sprite_data_pointer
@@ -5355,8 +5364,8 @@ local function overworld_mode()
   local is_submap = mem(u8, WRAM.current_submap, mem(u8, WRAM.current_character)) > 0
   
   for i = 0, 0x400 - 1 do
-    local address = WRAM.OW_tile_translevel + (is_submap and 0x400 or 0)
-    local level = mem(u8, address, i) -- TODO: perhaps it's faster reading it just once and storing in a table
+    local address_offset = (is_submap and 0x400 or 0)
+    local level = mem(u8, WRAM.OW_tile_translevel, address_offset + i) -- TODO: perhaps it's faster reading it just once and storing in a table
     
     if level ~= 0 then -- is a valid level
       
