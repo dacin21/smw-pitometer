@@ -1872,7 +1872,7 @@ local WRAM = {
   sprite_OAM_index = remap(0x15ea, "WRAM", 0x3a2, "SA1_IRAM"),
   sprite_misc_1602 = remap(0x1602, "WRAM", 0x3ce, "SA1_IRAM"),
   sprite_misc_160e = remap(0x160e, "WRAM", 0x3e4, "SA1_IRAM"),
-  sprite_index_to_level = remap(0x161a, "WRAM", 0x01578, "SA1_IRAM"),
+  sprite_index_to_level = remap(0x161a, "WRAM", 0x01578, "SA1_BWRAM"),
   sprite_misc_1626 = remap(0x1626, "WRAM", 0x0158e, "SA1_BWRAM"),
   sprite_behind_scenery = remap(0x1632, "WRAM", 0x015a4, "SA1_BWRAM"),
   sprite_misc_163e = remap(0x163e, "WRAM", 0x3fa, "SA1_IRAM"),
@@ -1912,7 +1912,7 @@ local WRAM = {
   sprite_miscellaneous14 = remap(0x15ac, "WRAM", 0x38c, "SA1_IRAM"),
   sprite_miscellaneous15 = remap(0x1602, "WRAM", 0x3ce, "SA1_IRAM"),
   sprite_miscellaneous16 = remap(0x160e, "WRAM", 0x3e4, "SA1_IRAM"),
-  sprite_miscellaneous17 = remap(0x1626, "WRAM", 0x158e, "SA1_IRAM"),
+  sprite_miscellaneous17 = remap(0x1626, "WRAM", 0x0158e, "SA1_BWRAM"),
   sprite_miscellaneous18 = remap(0x163e, "WRAM", 0x3fa, "SA1_IRAM"),
   sprite_miscellaneous19 = remap(0x187b, "WRAM", 0x410, "SA1_IRAM"),
 
@@ -3258,16 +3258,19 @@ local function sprite_level_info()
 
   -- Sprite data enviroment
   local pointer = Sprite_data_pointer
+  -- print(string.format("Sprite data pointer: %x", pointer))
   
-  --[[
-    This doesn't seem to work 
-      -- Convert pointer from SNES address to PC address (to use ROM_domain instead of "System Bus") -- TODO: maybe make a function for this, if this conversion become necessary in other instances
-      local pointer_pc, pointer_pc_bank, pointer_pc_addr
-      pointer_pc_bank = floor(pointer/0x20000)
-      pointer_pc_addr = bit.band(pointer, 0xFFFF) - 0x8000*(floor(pointer/0x10000)+1)%2
-      pointer_pc = pointer_pc_bank*0x10000 + pointer_pc_addr  
-      -- TODO: check if there's any hack that is HiROM, because conversion there is different thus this method will not work
-  ]]--
+  -- Convert pointer from SNES address to PC address (to use ROM_domain instead of "System Bus") -- TODO: maybe make a function for this, if this conversion become necessary in other instances
+  local pointer_pc, pointer_pc_bank, pointer_pc_addr
+  pointer_pc_bank = floor(pointer/0x20000)
+  if pointer_pc_bank >= 0x40 then -- HiROM mapping.
+    pointer_pc_bank = pointer_pc_bank - 0x20
+  end
+  pointer_pc_addr = bit.band(pointer, 0xFFFF) - 0x8000*((floor(pointer/0x10000)+1)%2)
+  pointer_pc = pointer_pc_bank*0x10000 + pointer_pc_addr
+
+  -- print(string.format("Rom data pointer: %x", pointer_pc))
+  sprite_data = remap(pointer_pc, "CARTRIDGE_ROM", pointer_pc, "CARTRIDGE_ROM")
   
   -- Level scan
   local is_vertical = read_screens() == "Vertical"
@@ -3275,10 +3278,10 @@ local function sprite_level_info()
   local sprite_counter = 0
   for id = 0, 0x80 - 1 do
     -- Sprite data
-    local byte_1 = memory.readbyte(pointer + 1 + id*3, "System Bus")
+    local byte_1 = mem(memory.readbyte, sprite_data, id*3 + 1)
     if byte_1==0xff then break end -- end of sprite data for this level
-    local byte_2 = memory.readbyte(pointer + 2 + id*3, "System Bus")
-    local byte_3 = memory.readbyte(pointer + 3 + id*3, "System Bus")
+    local byte_2 = mem(memory.readbyte, sprite_data, id*3 + 2)
+    local byte_3 = mem(memory.readbyte, sprite_data, id*3 + 3)
 
     local sxpos, sypos
     if is_vertical then -- vertical
