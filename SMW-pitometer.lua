@@ -1732,6 +1732,7 @@ end
 
 -- Memory wrapper for easy SA-1 support
 local function mem(memory_function, location, offset)
+  if type(location) ~= "table" then print(location) end
   offset = offset == nil and 0 or offset
   return memory_function(location.address + offset, location.domain)
 end
@@ -1743,11 +1744,26 @@ local function remap(reg_address, reg_domain, sa1_address, sa1_domain)
     return {address = reg_address, domain = reg_domain }
   end
 end
+-- The system bus domain doesn't work on BSNESv115, use this function instead
+local function rom_pointer(pointer)
+  -- Convert pointer from SNES address to PC address (to use ROM_domain instead of "System Bus")
+  local pointer_pc, pointer_pc_bank, pointer_pc_addr
+  pointer_pc_bank = floor(pointer/0x20000)
+  if pointer_pc_bank >= 0x40 then -- HiROM mapping.
+    pointer_pc_bank = pointer_pc_bank - 0x20
+  end
+  pointer_pc_addr = bit.band(pointer, 0xFFFF) - 0x8000*((floor(pointer/0x10000)+1)%2)
+  pointer_pc = pointer_pc_bank*0x10000 + pointer_pc_addr
+  -- print(string.format("Pointer %x resolved to %x", pointer, pointer_pc))
+
+  return remap(pointer_pc, ROM_domain, pointer_pc, ROM_domain)
+end
 
 
 --#############################################################################
 -- SMW ADDRESSES AND CONSTANTS
 local WRAM = {
+  scratch_0d = remap(0x0d, "WRAM", 0x0d, "SA1_IRAM"),
   -- I/O
   ctrl_1_1 = remap(0x0015, "WRAM", 0x0015, "SA1_IRAM"),
   ctrl_1_2 = remap(0x0017, "WRAM", 0x0017, "SA1_IRAM"),
@@ -1766,6 +1782,7 @@ local WRAM = {
   sprite_data_pointer = remap(0x00CE, "WRAM", 0x00CE, "SA1_IRAM"), -- 3 bytes
   layer1_data_pointer = remap(0x0065, "WRAM", 0x0065, "SA1_IRAM"), -- 3 bytes
   layer2_data_pointer = remap(0x0068, "WRAM", 0x0068, "SA1_IRAM"), -- 3 bytes
+  slope_data_pointer = remap(0x0082, "WRAM", 0x0082, "SA1_IRAM"), -- 3 bytes
   sprite_memory_header = remap(0x1692, "WRAM", 0x1692, "SA1_BWRAM"),
   lock_animation_flag = remap(0x009d, "WRAM", 0x009d, "SA1_IRAM"), -- Most codes will still run if this is set, but almost nothing will move or animate.
   level_mode_settings = remap(0x1925, "WRAM", 0x1925, "SA1_BWRAM"),
@@ -1842,7 +1859,10 @@ local WRAM = {
   yoshi_riding_flag = remap(0x187a, "WRAM", 0x187a, "SA1_BWRAM"),  -- #$00 = No, #$01 = Yes, #$02 = Yes, and turning around.
   yoshi_tile_pos = remap(0x0d8c, "WRAM", 0x0d8c, "SA1_BWRAM"),
   yoshi_in_pipe = remap(0x1419, "WRAM", 0x1419, "SA1_BWRAM"),
-  
+  yoshi_wings_flag = remap(0x1410, "WRAM", 0x1410, "SA1_BWRAM"),
+  -- Off screen tongue
+  layer1_vram_upload = remap(0x18187, "WRAM", 0x18187, "SA1_BWRAM"),
+
   -- Sprites
   sprite_status = remap(0x14c8, "WRAM", 0x242, "SA1_IRAM"),
   sprite_number = remap(0x009e, "WRAM", 0x200, "SA1_IRAM"),
@@ -2011,10 +2031,23 @@ local WRAM = {
   level_flag_table = remap(0x1ea2, "WRAM", 0x1ea2, "SA1_BWRAM"),
   level_exit_type = remap(0x0dd5, "WRAM", 0x0dd5, "SA1_BWRAM"),
   midway_point = remap(0x13ce, "WRAM", 0x13ce, "SA1_BWRAM"),
-  
+
   -- Layers
   layer2_x_nextframe = remap(0x1466, "WRAM", 0x1466, "SA1_BWRAM"),
   layer2_y_nextframe = remap(0x1468, "WRAM", 0x1468, "SA1_BWRAM"),
+
+  -- map16 tiles in the current room
+  map16_low = remap(0x00c800, "WRAM", 0x00c800, "SA1_BWRAM"),
+  map16_high = remap(0x01c800, "WRAM", 0x01c800, "SA1_BWRAM"),
+}
+
+local ROM = {
+  -- Map16
+  map16_act_as = remap(0x088000, ROM_domain, 0x3D8000, ROM_domain),
+  slope_height = rom_pointer(0x00e632),
+
+  -- used for off screen tongue
+  level_mode_table = remap(0x3E28, ROM_domain, 0x3E28, ROM_domain),
 }
 
 local SMW = {
@@ -2700,7 +2733,7 @@ act_as_cache = {}
 local function resolve_act_as(kind)
   for it=0,99 do
     -- I'm not 100% sure if the act as table is always at 0x88000, but this seems to work.
-    local act = act_as_cache[kind] or u16(0x88000 + 2*kind, ROM_domain)
+    local act = act_as_cache[kind] or mem(u16, ROM.map16_act_as, 2*kind)
     act_as_cache[kind] = act
     if act == kind then break end
     kind = act
@@ -2736,7 +2769,7 @@ local function get_map16_value(x_game, y_game)
   end
   if (num_id >= 0 and num_id <= 0x37ff) then
     address = fmt(" $%4.x", 0xc800 + num_id)
-    kind = 256*mem(u8, 0x1c800, num_id) + mem(u8, 0xc800, num_id)
+    kind = 256*mem(u8, WRAM.map16_high, num_id) + mem(u8, WRAM.map16_low, num_id)
   end
 
   if kind then
@@ -2747,12 +2780,12 @@ end
 
 
 local function draw_slope_tile(kind, left, top)
-  local slope_pointer = mem(u24, 0x82) + kind - 0x16E
+  local slope_pointer = mem(u24, WRAM.slope_data_pointer) + kind - 0x16E
   -- print(fmt("%04X -> %04X -> %04X", kind, slope_pointer, mem(u8, slope_pointer)))
   for x = 0,15 do
-    local index = mem(u8, slope_pointer, "System Bus")*16 + x
+    local index = mem(u8, rom_pointer(slope_pointer))*16 + x
     -- print(fmt("%04X %04X", x, index))
-    local y = mem(u8, 0xe632, index, "System Bus")
+    local y = mem(u8, ROM.slope_height, index)
     draw.line(left+x, top+y, left+x, top+y+10, COLOUR.slope_tile)
   end
 
@@ -3266,20 +3299,7 @@ local function sprite_level_info()
   if Game_mode <= SMW.game_mode_fade_to_level + 2 then return end
 
   -- Sprite data enviroment
-  local pointer = Sprite_data_pointer
-  -- print(string.format("Sprite data pointer: %x", pointer))
-  
-  -- Convert pointer from SNES address to PC address (to use ROM_domain instead of "System Bus") -- TODO: maybe make a function for this, if this conversion become necessary in other instances
-  local pointer_pc, pointer_pc_bank, pointer_pc_addr
-  pointer_pc_bank = floor(pointer/0x20000)
-  if pointer_pc_bank >= 0x40 then -- HiROM mapping.
-    pointer_pc_bank = pointer_pc_bank - 0x20
-  end
-  pointer_pc_addr = bit.band(pointer, 0xFFFF) - 0x8000*((floor(pointer/0x10000)+1)%2)
-  pointer_pc = pointer_pc_bank*0x10000 + pointer_pc_addr
-
-  -- print(string.format("Rom data pointer: %x", pointer_pc))
-  sprite_data = remap(pointer_pc, "CARTRIDGE_ROM", pointer_pc, "CARTRIDGE_ROM")
+  sprite_data = rom_pointer(Sprite_data_pointer)
   
   -- Level scan
   local is_vertical = read_screens() == "Vertical"
@@ -4513,8 +4533,8 @@ special_sprite_property[0x1e] = function(slot) -- Lakitu
   mem(u8, WRAM.sprite_horizontal_direction, slot) ~= 0 then
 
     local OAM_index = 0x3C -- 0xec in vanilla?
-    local xoff = mem(u8, 0x304, OAM_index) - 0x0c -- lots of unlisted WRAM
-    local yoff = mem(u8, 0x305, OAM_index) - 0x0c
+    local xoff = mem(u8, remap(0x304, "WRAM"), OAM_index) - 0x0c -- lots of unlisted WRAM
+    local yoff = mem(u8, remap(0x305, "WRAM"), OAM_index) - 0x0c
     local width, height = 0x18 - 1, 0x18 - 1  -- instruction BCS
 
     print(xoff, yoff, width, height, COLOUR.awkward_hitbox, COLOUR.awkward_hitbox_bg)
@@ -4668,8 +4688,8 @@ special_sprite_property[0x6b] = function(slot) -- Wall springboard (left wall)
   if t.x_offscreen == 0 and t.y_offscreen == 0 then
     local OAM_index = mem(u8, WRAM.sprite_OAM_index, slot)
     for ball = 0, 4 do
-      local x = mem(u8, 0x300, OAM_index, 4*ball)
-      local y = mem(u8, 0x301, OAM_index, 4*ball)
+      local x = mem(u8, remap(0x300, "WRAM"), OAM_index + 4*ball)
+      local y = mem(u8, remap(0x301, "WRAM"), OAM_index + 4*ball)
 
       draw.rectangle(x, y, 8, 8, color, COLOUR.sprites_bg)
       draw.text(draw.AR_x*(x + 2), draw.AR_y*(y + 2), ball, COLOUR.text)
@@ -4725,8 +4745,8 @@ end
 special_sprite_property[0x86] = function(slot) -- Wiggler (segments)
   local OAM_index = mem(u8, WRAM.sprite_OAM_index, slot)
   for seg = 0, 4 do
-    local xoff = mem(u8, 0x304, OAM_index) - 0x0a -- lots of unlisted WRAM
-    local yoff = mem(u8, 0x305, OAM_index) - 0x1b
+    local xoff = mem(u8, remap(0x304, "WRAM"), OAM_index) - 0x0a -- lots of unlisted WRAM
+    local yoff = mem(u8, remap(0x305, "WRAM"), OAM_index) - 0x1b
     if Yoshi_riding_flag then yoff = yoff - 0x10 end
     local width, height = 0x17 - 1, 0x17
     local xend, yend = xoff + width, yoff + height
@@ -5071,7 +5091,7 @@ local function yoshi()
     local tongue_height = mem(u8, WRAM.yoshi_tile_pos)
     local yoshi_in_pipe = mem(u8, WRAM.yoshi_in_pipe)
     local wings_timer = mem(u8, WRAM.cape_fall)
-    local has_wings = mem(u8, 0x1410) == 0x02
+    local has_wings = mem(u8, WRAM.yoshi_wings_flag) == 0x02
     local yoshi_offscreen = Sprites_info[yoshi_id].x_offscreen ~= 0 or Sprites_info[yoshi_id].y_offscreen
 
     local eat_type_str = eat_id == SMW.null_sprite_id and "-" or string.format("%02X", eat_type)
@@ -5117,7 +5137,7 @@ local function yoshi()
       -- Tongue Hitbox
       local actual_index = tile_index
       if yoshi_direction == 0 then actual_index = tile_index + 8 end
-      actual_index = yoshi_in_pipe ~= 0 and mem(u8, 0x0d) or SMW.yoshi_tongue_x_offsets[actual_index] or 0
+      actual_index = yoshi_in_pipe ~= 0 and mem(u8, WRAM.scratch_0d) or SMW.yoshi_tongue_x_offsets[actual_index] or 0
 
       local xoff = special_sprite_property.yoshi_tongue_offset(actual_index, tongue_len)
 
@@ -5138,7 +5158,7 @@ local function yoshi()
       -- glitched hitbox for offscreen yoshi
       if yoshi_offscreen ~= 0 then
         -- a weird way of detecting wether tiles were uploaded to VRAM, but seems to work ok.
-        local tongue_is_long = mem(u8, 0x18187)
+        local tongue_is_long = mem(u8, WRAM.layer1_vram_upload) -- shouldn't this be u16?
         -- short tongue
         local xoff_os = special_sprite_property.yoshi_tongue_offset(0x00, tongue_len) + 1
         local yoff_os = tile_index + 2
@@ -5146,7 +5166,7 @@ local function yoshi()
         draw.rectangle(x_screen + xoff_os, y_screen + yoff_os, 8, 4, colour_os, 0x40000000)
         -- long tongue
         local level_mode = mem(u8, WRAM.level_mode_settings)
-        local clobbered_0d = memory.read_u8(0x3E28 + 2*level_mode, ROM_domain)
+        local clobbered_0d = mem(u8, ROM.level_mode_table, 2*level_mode)
         xoff_os = special_sprite_property.yoshi_tongue_offset(clobbered_0d, tongue_len)
         yoff_os = tile_index + 2
         colour_os = tongue_is_long ~= 0 and COLOUR.tongue_line or COLOUR.tongue_line_inactive
