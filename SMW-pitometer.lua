@@ -1398,10 +1398,10 @@ local OPTIONS = config.OPTIONS
 local COLOUR = config.COLOUR
 
 -- Font settings
-local BIZHAWK_FONT_WIDTH = 10
-local BIZHAWK_FONT_HEIGHT = 14
+draw.BIZHAWK_FONT_WIDTH = 10
+draw.BIZHAWK_FONT_HEIGHT = 14
 draw.CUSTOM_FONTS = {
-  [false] = { file = nil, height = BIZHAWK_FONT_HEIGHT, width = BIZHAWK_FONT_WIDTH }, -- this is the BizHawk default font
+  [false] = { file = nil, height = draw.BIZHAWK_FONT_HEIGHT, width = draw.BIZHAWK_FONT_WIDTH }, -- this is the BizHawk default font
 
   --snes9xlua =     { file = [[data/snes9xlua.font]],      height = 14, width = 10 },
   --snes9xluaclever = { file = [[data/snes9xluaclever.font]],  height = 14, width = 08 }, -- quite pixelated
@@ -1603,8 +1603,8 @@ end
 -- Complex function for drawing, that uses text_position
 local function draw_text(x, y, text, ...)
   -- Reads external variables
-  local font_width  = BIZHAWK_FONT_WIDTH
-  local font_height = BIZHAWK_FONT_HEIGHT
+  local font_width  = draw.BIZHAWK_FONT_WIDTH
+  local font_height = draw.BIZHAWK_FONT_HEIGHT
   local bg_default_color = COLOUR.outline
   local text_color, bg_color, always_on_client, always_on_game, ref_x, ref_y
   local arg1, arg2, arg3, arg4, arg5, arg6 = ...
@@ -1642,8 +1642,8 @@ end
 
 local function alert_text(x, y, text, text_color, bg_color, always_on_game, ref_x, ref_y)
   -- Reads external variables
-  local font_width  = BIZHAWK_FONT_WIDTH
-  local font_height = BIZHAWK_FONT_HEIGHT
+  local font_width  = draw.BIZHAWK_FONT_WIDTH
+  local font_height = draw.BIZHAWK_FONT_HEIGHT
 
   local x_pos, y_pos, text_length = text_position(x, y, text, font_width, font_height, false, always_on_game, ref_x, ref_y)
 
@@ -1661,7 +1661,7 @@ local function over_text(x, y, value, base, color_base, color_value, color_bg, a
   local x_end, y_end, length = draw_text(x, y, base,  color_base, color_bg, always_on_client, always_on_game, ref_x, ref_y)
 
   change_transparency(color_value or COLOUR.text, draw.Text_max_opacity * draw.Text_opacity)
-  gui_text(x_end + draw.Border_left - length, y_end + draw.Border_top - BIZHAWK_FONT_HEIGHT, value, color_value, 0)
+  gui_text(x_end + draw.Border_left - length, y_end + draw.Border_top - draw.BIZHAWK_FONT_HEIGHT, value, color_value, 0)
 
   return x_end, y_end, length
 end
@@ -1736,12 +1736,17 @@ local function mem(memory_function, location, offset)
   offset = offset == nil and 0 or offset
   return memory_function(location.address + offset, location.domain)
 end
+local function wmem(memory_function, location, value, offset)
+  if type(location) ~= "table" then print(location) end
+  offset = offset == nil and 0 or offset
+  return memory_function(location.address + offset, value, location.domain)
+end
 
 local function remap(reg_address, reg_domain, sa1_address, sa1_domain)
   if HAS_SA1 then
     return { address = sa1_address, domain = sa1_domain }
   else
-    return {address = reg_address, domain = reg_domain }
+    return { address = reg_address, domain = reg_domain }
   end
 end
 -- The system bus domain doesn't work on BSNESv115, use this function instead
@@ -2830,7 +2835,7 @@ local function draw_layer1_tiles(camera_x, camera_y)
         -- Draw Map16 id
         if kind and x_mouse == positions[1] and y_mouse == positions[2] then
           local position_str = fmt("(%02X, %02X)", num_x, num_y)
-          draw.text(draw.AR_x*(left + 4), draw.AR_y*top - BIZHAWK_FONT_HEIGHT, fmt("Map16 %s, %X->%X%s", position_str, kind, act_as, address), true, false, 0.5, 1.0)
+          draw.text(draw.AR_x*(left + 4), draw.AR_y*top - draw.BIZHAWK_FONT_HEIGHT, fmt("Map16 %s, %X->%X%s", position_str, kind, act_as, address), true, false, 0.5, 1.0)
         end
       end
 
@@ -3066,7 +3071,7 @@ local function show_movie_info()
   draw.Bg_opacity = 1.0
   local y_text = - draw.Border_top
   local x_text = 0
-  local width = BIZHAWK_FONT_WIDTH
+  local width = draw.BIZHAWK_FONT_WIDTH
 
   local rec_color = (Readonly or not Movie_active) and COLOUR.text or COLOUR.warning
   local recording_bg = (Readonly or not Movie_active) and COLOUR.background or COLOUR.warning_bg
@@ -3129,7 +3134,7 @@ local function show_game_info()
     local vertical_scroll_flag_header = mem(u8, WRAM.vertical_scroll_flag_header)
     local vertical_scroll_enabled = mem(u8, WRAM.vertical_scroll_enabled)
     if vertical_scroll_flag_header ~=0 and vertical_scroll_enabled ~= 0 then
-      draw.text(x_cam_txt + BIZHAWK_FONT_WIDTH, 0, vertical_scroll_enabled, COLOUR.warning2)
+      draw.text(x_cam_txt + draw.BIZHAWK_FONT_WIDTH, 0, vertical_scroll_enabled, COLOUR.warning2)
     end  
   
     -- Time frame counter of the clock
@@ -3163,8 +3168,8 @@ function display_RNG()
   -- Font
   draw.Text_opacity = 0.8
   local x = -draw.Border_left
-  local y = draw.Screen_height - draw.Border_top - 19*BIZHAWK_FONT_HEIGHT
-  local height = BIZHAWK_FONT_HEIGHT
+  local y = draw.Screen_height - draw.Border_top - 19*draw.BIZHAWK_FONT_HEIGHT
+  local height = draw.BIZHAWK_FONT_HEIGHT
   local upper_rows = 8
 
   local index = mem(u32, WRAM.RNG_input)
@@ -3174,7 +3179,7 @@ function display_RNG()
     local min = math.max(RNG_counter - upper_rows, 1)
     local max = math.min(min + 2*upper_rows, 27777) -- todo: hardcoded constants are never a good idea
     
-    draw.text(x, y - BIZHAWK_FONT_HEIGHT, "RNG:", COLOUR.text)
+    draw.text(x, y - draw.BIZHAWK_FONT_HEIGHT, "RNG:", COLOUR.text)
     for i = min, max do
       local seed1, seed2 = bit.band(RNG.reverse_possible_values[i], 0xff), bit.band(RNG.reverse_possible_values[i], 0xff00)/0x100
       local rng1, rng2 = bit.band(RNG.reverse_possible_values[i], 0xff0000)/0x10000, bit.band(RNG.reverse_possible_values[i], 0xff000000)/0x1000000  --bit.bfields(RNG.reverse_possible_values[i], 8, 8, 8, 8)
@@ -3224,8 +3229,8 @@ local function show_controller_data()
 
   -- Font
   draw.Text_opacity = 0.9
-  local height = BIZHAWK_FONT_HEIGHT
-  local x_pos, y_pos, x, y, _ = -draw.Border_left, 0, 0, BIZHAWK_FONT_HEIGHT
+  local height = draw.BIZHAWK_FONT_HEIGHT
+  local x_pos, y_pos, x, y, _ = -draw.Border_left, 0, 0, draw.BIZHAWK_FONT_HEIGHT
 
   x = draw.over_text(x_pos, y_pos, 256*mem(u8, WRAM.ctrl_1_1) + mem(u8, WRAM.ctrl_1_2), "BYsS^v<>AXLR0123", COLOUR.weak)
   _, y = draw.text(x, y_pos, " (RAM data)", COLOUR.weak)
@@ -3329,7 +3334,7 @@ local function sprite_level_info()
       if sxpos - Camera_x + 16 > -OPTIONS.left_gap and sxpos - Camera_x - 16 < 256 + OPTIONS.right_gap and -- to avoid printing the whole level data
          sypos - Camera_y + 16 > -OPTIONS.top_gap and sypos - Camera_y - 16 < 224 + OPTIONS.bottom_gap then
 
-        draw.text((sxpos - Camera_x + 8)*draw.AR_x, (sypos - Camera_y - 2)*draw.AR_y - BIZHAWK_FONT_HEIGHT, fmt("%02X", id), color, false, false, 0.5)
+        draw.text((sxpos - Camera_x + 8)*draw.AR_x, (sypos - Camera_y - 2)*draw.AR_y - draw.BIZHAWK_FONT_HEIGHT, fmt("%02X", id), color, false, false, 0.5)
         if color ~= COLOUR.text then -- don't display sprite ID if sprite is spawned
           draw.text((sxpos - Camera_x + 8)*draw.AR_x, (sypos - Camera_y + 4)*draw.AR_y, fmt("%02X", byte_3), color, false, false, 0.5)
         end
@@ -3400,7 +3405,7 @@ local function level_info()
   
   -- Font
   local x_pos = draw.Buffer_width + draw.Border_right
-  local y_pos = - draw.Border_top + BIZHAWK_FONT_HEIGHT + 2
+  local y_pos = - draw.Border_top + draw.BIZHAWK_FONT_HEIGHT + 2
   draw.Text_opacity = 0.8
   draw.Bg_opacity = 1.0
   
@@ -3411,12 +3416,12 @@ local function level_info()
   if OPTIONS.display_level_main_info then
     -- Level indexes and type
     draw.text(x_pos, y_pos, fmt("Room(%03X) OWLevel(%03X) %.1s", LM_translevel_number, Level_index, level_type), COLOUR.text, true)
-    y_pos = y_pos + BIZHAWK_FONT_HEIGHT
+    y_pos = y_pos + draw.BIZHAWK_FONT_HEIGHT
     
     -- Number of screens within the level
     local screens_fmt_str = OPTIONS.positions_in_hex and "Screens(%02X/%02X, %02X/%02X)" or "Screens(%d/%d, %d/%d)"
     draw.text(x_pos, y_pos, fmt(screens_fmt_str, hscreen_current, hscreen_number, vscreen_current, vscreen_number), true)
-    y_pos = y_pos + BIZHAWK_FONT_HEIGHT
+    y_pos = y_pos + draw.BIZHAWK_FONT_HEIGHT
     
     -- Sprite buoyancy
     local sprite_buoyancy = mem(u8, WRAM.sprite_buoyancy)
@@ -3424,7 +3429,7 @@ local function level_info()
       -- $7E190E has format "XY-- ----", with X = Enable sprite buoyancy and Y = Enable sprite buoyancy and disable sprite interaction with layer 2
       local layer2_disabled = bit.test(sprite_buoyancy, 6) and " (Layer 2 disabled)" or ""
       draw.text(x_pos, y_pos, fmt("Has buoyancy%s", layer2_disabled), COLOUR.warning, true)
-      y_pos = y_pos + BIZHAWK_FONT_HEIGHT
+      y_pos = y_pos + draw.BIZHAWK_FONT_HEIGHT
     end
   end
   
@@ -3454,7 +3459,7 @@ local function level_info()
         elseif level_type == "Vertical" then
           screen_str = fmt((OPTIONS.positions_in_hex and "%02X" or "%d").." (%s)", screen_region_y, screen_region_x == 0 and "left" or "right")
         end
-        draw.rectangle(screen_x + 1, screen_y + 1, (string.len(screen_str)*BIZHAWK_FONT_WIDTH)/draw.AR_x, (BIZHAWK_FONT_HEIGHT + 4)/draw.AR_y, COLOUR.screen_borders, COLOUR.screen_borders)
+        draw.rectangle(screen_x + 1, screen_y + 1, (string.len(screen_str)*draw.BIZHAWK_FONT_WIDTH)/draw.AR_x, (draw.BIZHAWK_FONT_HEIGHT + 4)/draw.AR_y, COLOUR.screen_borders, COLOUR.screen_borders)
         draw.text((screen_x + 1)*draw.AR_x, (screen_y + 1)*draw.AR_y, screen_str, COLOUR.text, COLOUR.screen_borders)
       end
     end
@@ -3469,7 +3474,7 @@ function draw_blocked_status(x_text, y_text, player_blocked_status, x_speed, y_s
   local block_height = 9 -- BizHawk
   local block_str = "Blocked:"
   local str_len = string.len(block_str)
-  local xoffset = (x_text + str_len*BIZHAWK_FONT_WIDTH)/draw.AR_x
+  local xoffset = (x_text + str_len*draw.BIZHAWK_FONT_WIDTH)/draw.AR_x
   local yoffset = y_text/draw.AR_y
   local color_line = COLOUR.warning
 
@@ -3775,8 +3780,8 @@ local function player()
   if OPTIONS.display_player_main_info then
   
     local i = 0
-    local delta_x = BIZHAWK_FONT_WIDTH
-    local delta_y = BIZHAWK_FONT_HEIGHT
+    local delta_x = draw.BIZHAWK_FONT_WIDTH
+    local delta_y = draw.BIZHAWK_FONT_HEIGHT
     local table_x = - draw.Border_left
     local table_y = draw.AR_y*20
     local colour
@@ -3934,7 +3939,7 @@ local function extended_sprites()
 
   -- Font
   draw.Text_opacity = 0.8
-  local height = BIZHAWK_FONT_HEIGHT
+  local height = draw.BIZHAWK_FONT_HEIGHT
 
   local y_pos = draw.AR_y*144
   local counter = 0
@@ -4022,7 +4027,7 @@ local function extended_sprites()
 
   if mem(u8, WRAM.spinjump_flag) ~= 0 and mem(u8, WRAM.powerup) == 3 then
     local fireball_timer = mem(u8, WRAM.spinjump_fireball_timer)
-    draw.text(x_pos - length - BIZHAWK_FONT_WIDTH, y_pos, fmt("%d %s",
+    draw.text(x_pos - length - draw.BIZHAWK_FONT_WIDTH, y_pos, fmt("%d %s",
     fireball_timer%16, bit.test(fireball_timer, 4) and RIGHT_ARROW or LEFT_ARROW), COLOUR.extended_sprites, true, false, 1.0, 1.0)
   end
 
@@ -4035,7 +4040,7 @@ local function cluster_sprites()
 
   -- Font
   draw.Text_opacity = 0.8
-  local height = BIZHAWK_FONT_HEIGHT
+  local height = draw.BIZHAWK_FONT_HEIGHT
   local x_pos, y_pos = draw.Border_right, draw.AR_y*45
   local counter = 0
 
@@ -4138,7 +4143,7 @@ local function minor_extended_sprites()
 
   -- Font
   draw.Text_opacity = 0.8
-  local height = BIZHAWK_FONT_HEIGHT
+  local height = draw.BIZHAWK_FONT_HEIGHT
   local x_pos, y_pos = 0, draw.Buffer_height*draw.AR_y - height*SMW.minor_extended_sprite_max
   
   local counter = 0
@@ -4195,7 +4200,7 @@ local function bounce_sprite_info()
 
   -- Font
   draw.Text_opacity = 0.8
-  local height = BIZHAWK_FONT_HEIGHT
+  local height = draw.BIZHAWK_FONT_HEIGHT
   local x_txt, y_txt = 0, draw.AR_y*45
   
   local counter = 0
@@ -4250,7 +4255,7 @@ local function quake_sprite_info()
 
   -- Font
   draw.Text_opacity = 0.8
-  local height = BIZHAWK_FONT_HEIGHT
+  local height = draw.BIZHAWK_FONT_HEIGHT
   local x_txt, y_txt = draw.Buffer_width + draw.Border_right, draw.AR_y*144 + 12*height  
  
  local counter = 0
@@ -4467,11 +4472,11 @@ local function draw_sprite_spawn_despawn()
       left_str = fmt("%d", Camera_x - left_line)
       right_str = fmt("%d", Camera_x + 256 + right_line)
     end
-    draw.text(-left_line*draw.AR_x, draw.Buffer_height + draw.Border_bottom - 2*BIZHAWK_FONT_HEIGHT, "Spawn", COLOUR.weak, true, false, 1)
-    draw.text(-left_line*draw.AR_x, draw.Buffer_height + draw.Border_bottom - 1*BIZHAWK_FONT_HEIGHT, left_str, COLOUR.weak, true, false, 1) -- bit.band 0xFFFF to handle negative values
+    draw.text(-left_line*draw.AR_x, draw.Buffer_height + draw.Border_bottom - 2*draw.BIZHAWK_FONT_HEIGHT, "Spawn", COLOUR.weak, true, false, 1)
+    draw.text(-left_line*draw.AR_x, draw.Buffer_height + draw.Border_bottom - 1*draw.BIZHAWK_FONT_HEIGHT, left_str, COLOUR.weak, true, false, 1) -- bit.band 0xFFFF to handle negative values
 
-    draw.text((256+right_line)*draw.AR_x, draw.Buffer_height + draw.Border_bottom - 2*BIZHAWK_FONT_HEIGHT, "Spawn", COLOUR.weak)
-    draw.text((256+right_line)*draw.AR_x, draw.Buffer_height + draw.Border_bottom - 1*BIZHAWK_FONT_HEIGHT, right_str, COLOUR.weak)
+    draw.text((256+right_line)*draw.AR_x, draw.Buffer_height + draw.Border_bottom - 2*draw.BIZHAWK_FONT_HEIGHT, "Spawn", COLOUR.weak)
+    draw.text((256+right_line)*draw.AR_x, draw.Buffer_height + draw.Border_bottom - 1*draw.BIZHAWK_FONT_HEIGHT, right_str, COLOUR.weak)
   end
 end
 
@@ -4486,7 +4491,7 @@ local function sprite_tweaker_editor(slot)
   local xoff = t.hitbox_xoff
   local yoff = t.hitbox_yoff
 
-  local width, height = BIZHAWK_FONT_WIDTH, BIZHAWK_FONT_HEIGHT
+  local width, height = draw.BIZHAWK_FONT_WIDTH, draw.BIZHAWK_FONT_HEIGHT
   local x_ini, y_ini = draw.AR_x*t.sprite_middle - 4*width, draw.AR_y*(y_screen + yoff) - 7*height
   local x_txt, y_txt = x_ini, y_ini
 
@@ -4614,7 +4619,7 @@ special_sprite_property[0x5f] = function(slot) -- Swinging brown platform (TODO 
   -- Powerup Incrementation helper
   local yoshi_right = 256*floor(x/256) - 58
   local yoshi_left  = yoshi_right + 32
-  local x_text, y_text, height = draw.AR_x*(x_screen + xoff), draw.AR_y*(y_screen + yoff), BIZHAWK_FONT_HEIGHT
+  local x_text, y_text, height = draw.AR_x*(x_screen + xoff), draw.AR_y*(y_screen + yoff), draw.BIZHAWK_FONT_HEIGHT
 
   if mouse_onregion(x_text, y_text, x_text + draw.AR_x*sprite_width, y_text + draw.AR_y*sprite_height) then
     local x_text, y_text = 0, 0
@@ -4771,7 +4776,7 @@ special_sprite_property[0xa9] = function(slot) -- Reznor
     else
       color = color_weak
     end
-    draw.text(3*BIZHAWK_FONT_WIDTH*index, draw.Buffer_height, fmt("%.2x", reznor), color, true, false, 0.0, 1.0)
+    draw.text(3*draw.BIZHAWK_FONT_WIDTH*index, draw.Buffer_height, fmt("%.2x", reznor), color, true, false, 0.0, 1.0)
   end
 end
 
@@ -4836,7 +4841,7 @@ special_sprite_property[0x92] = function(slot) -- Splittin' Chuck
 end
 
 special_sprite_property[0xa0] = function(slot) -- Bowser
-  local height = BIZHAWK_FONT_HEIGHT
+  local height = draw.BIZHAWK_FONT_HEIGHT
   local y_text = draw.Buffer_height - 10*height
   for index = 0, 9 do
     local value = mem(u8, WRAM.bowser_attack_timers, index)
@@ -4955,7 +4960,7 @@ local function sprite_info(id, counter, table_position)
     if Player_powerup == 2 then
       local contact_cape = mem(u8, WRAM.sprite_disable_cape, id)
       if contact_cape ~= 0 then
-        draw.text(draw.AR_x*sprite_middle, draw.AR_y*sprite_top - 2*BIZHAWK_FONT_HEIGHT, contact_cape, COLOUR.cape, true)
+        draw.text(draw.AR_x*sprite_middle, draw.AR_y*sprite_top - 2*draw.BIZHAWK_FONT_HEIGHT, contact_cape, COLOUR.cape, true)
       end
     end
   end
@@ -4982,7 +4987,7 @@ local function sprite_info(id, counter, table_position)
             id, number, status, stun, x, floor(x_sub/16), x_speed, x_speed_water, y, floor(y_sub/16), y_speed)
     end
 
-    draw.text(draw.Buffer_width + draw.Border_right, table_position + counter*BIZHAWK_FONT_HEIGHT, sprite_str, info_color, true)
+    draw.text(draw.Buffer_width + draw.Border_right, table_position + counter*draw.BIZHAWK_FONT_HEIGHT, sprite_str, info_color, true)
   end
   
   -- Miscellaneous sprite table -- TODO
@@ -4993,10 +4998,10 @@ local function sprite_info(id, counter, table_position)
       text = fmt("%s %3d", text, num) or text
     end
 
-    draw.text(- draw.Border_left, draw.AR_y*144 - BIZHAWK_FONT_HEIGHT, text, COLOUR.weak)
+    draw.text(- draw.Border_left, draw.AR_y*144 - draw.BIZHAWK_FONT_HEIGHT, text, COLOUR.weak)
     
 
-    local x_mis, y_mis = - draw.Border_left, draw.AR_y*144 + counter*BIZHAWK_FONT_HEIGHT
+    local x_mis, y_mis = - draw.Border_left, draw.AR_y*144 + counter*draw.BIZHAWK_FONT_HEIGHT
 
     local t = OPTIONS.miscellaneous_sprite_table_number
     local misc, text = nil, fmt("#%.2d", id)
@@ -5027,8 +5032,8 @@ local function sprites()
 
   local swap_slot = mem(u8, WRAM.sprite_swap_slot)
   local smh = mem(u8, WRAM.sprite_memory_header)
-  draw.text(draw.Buffer_width + draw.Border_right, table_position - 2*BIZHAWK_FONT_HEIGHT, fmt("Sprites: %d", counter), COLOUR.weak, true)
-  draw.text(draw.Buffer_width + draw.Border_right, table_position - BIZHAWK_FONT_HEIGHT, fmt("1st div: %d. Swap: %d",
+  draw.text(draw.Buffer_width + draw.Border_right, table_position - 2*draw.BIZHAWK_FONT_HEIGHT, fmt("Sprites: %d", counter), COLOUR.weak, true)
+  draw.text(draw.Buffer_width + draw.Border_right, table_position - draw.BIZHAWK_FONT_HEIGHT, fmt("1st div: %d. Swap: %d",
                                     SMW.sprite_memory_max[smh] or 0, swap_slot), COLOUR.weak, true)
 end
 
@@ -5102,7 +5107,7 @@ local function yoshi()
     if yoshi_direction == 0 then direction_symbol = RIGHT_ARROW else direction_symbol = LEFT_ARROW end
 
     draw.text(x_text, y_text, fmt("Yoshi %s %d", direction_symbol, turn_around), COLOUR.yoshi)
-    local h = BIZHAWK_FONT_HEIGHT
+    local h = draw.BIZHAWK_FONT_HEIGHT
 
     draw.text(x_text, y_text + h, fmt("(%0s, %0s) %02X, %d, %d",
               eat_id_str, eat_type_str, tongue_len, tongue_wait, tongue_timer), COLOUR.yoshi)
@@ -5194,7 +5199,7 @@ local function display_fadeout_timers()
   local zero_subspeed = mem(u8, WRAM.x_subspeed) == 0
 
   -- Display
-  local height = BIZHAWK_FONT_HEIGHT
+  local height = draw.BIZHAWK_FONT_HEIGHT
   local x, y = 0, draw.Buffer_height*draw.AR_y - 3*height -- 3 max lines
   local text = 2*end_level_timer + (Real_frame)%2
   draw.text(x, y, fmt("End timer: %d(%d) -> real frame", text, end_level_timer), COLOUR.text)
@@ -5215,7 +5220,7 @@ local function show_counters()
   -- Font
   draw.Text_opacity = 1.0
   draw.Bg_opacity = 1.0
-  local height = BIZHAWK_FONT_HEIGHT
+  local height = draw.BIZHAWK_FONT_HEIGHT
   local text_counter = 0
 
   local pipe_entrance_timer = mem(u8, WRAM.pipe_entrance_timer)
@@ -5325,8 +5330,8 @@ local function overworld_mode()
   draw.Text_opacity = 1.0
   draw.Bg_opacity = 1.0
 
-  local height = BIZHAWK_FONT_HEIGHT
-  local y_text = BIZHAWK_FONT_HEIGHT
+  local height = draw.BIZHAWK_FONT_HEIGHT
+  local y_text = draw.BIZHAWK_FONT_HEIGHT
 
   -- OW camera (Note: the script uses $7E1462 and $7E1464 (layer 1 position next frame) for Camera_x and Camera_y, but the OW doesn't use these addresses)
   local OW_camera_x = mem(s16, WRAM.layer1_x_mirror)
@@ -5360,7 +5365,7 @@ local function overworld_mode()
   for byte_off = 0, 14 do
     local event_flags = mem(u8, WRAM.event_flags, byte_off) -- TODO check if reading just once and storing in table is faster (could re-read once it detects new exits)
 
-    draw.text(-draw.Border_left, y_text + byte_off*BIZHAWK_FONT_HEIGHT*1.5, fmt("%02X %02X %02X %02X %02X %02X %02X %02X ",
+    draw.text(-draw.Border_left, y_text + byte_off*draw.BIZHAWK_FONT_HEIGHT*1.5, fmt("%02X %02X %02X %02X %02X %02X %02X %02X ",
       8*byte_off + 0, 8*byte_off + 1, 8*byte_off + 2, 8*byte_off + 3, 8*byte_off + 4, 8*byte_off + 5, 8*byte_off + 6, 8*byte_off + 7), COLOUR.disabled)
     
     local triggered_str = ""
@@ -5371,7 +5376,7 @@ local function overworld_mode()
         triggered_str = triggered_str .. "   "
       end
     end
-    draw.text(-draw.Border_left, y_text + byte_off*BIZHAWK_FONT_HEIGHT*1.5, triggered_str, COLOUR.yoshi)
+    draw.text(-draw.Border_left, y_text + byte_off*draw.BIZHAWK_FONT_HEIGHT*1.5, triggered_str, COLOUR.yoshi)
   end
 
   -- Level tiles info
@@ -5403,7 +5408,7 @@ local function overworld_mode()
       -- Draw only if inside the game screen
       if luap.inside_rectangle(level_x, level_y, 0, 0, 256 - 16, 224 - 16) then
         draw.rectangle(level_x, level_y, 15, 15, COLOUR.block, 0)
-        draw.text(level_x*draw.AR_x, level_y*draw.AR_y - BIZHAWK_FONT_HEIGHT, fmt("%03X", level + (is_submap and 0xDC or 0)), COLOUR.text)
+        draw.text(level_x*draw.AR_x, level_y*draw.AR_y - draw.BIZHAWK_FONT_HEIGHT, fmt("%03X", level + (is_submap and 0xDC or 0)), COLOUR.text)
       end
     end
   end  
@@ -5468,7 +5473,7 @@ end
 
 local function left_click()
   -- Call options menu if the form is closed
-  if Options_form.is_form_closed and mouse_onregion(0, 0, 0 + 14*BIZHAWK_FONT_WIDTH, 0 + 2*BIZHAWK_FONT_HEIGHT - 1) then -- bizhawk
+  if Options_form.is_form_closed and mouse_onregion(0, 0, 0 + 14*draw.BIZHAWK_FONT_WIDTH, 0 + 2*draw.BIZHAWK_FONT_HEIGHT - 1) then -- bizhawk
     Options_form.create_window()
     return
   end
@@ -5587,9 +5592,9 @@ end
 function Cheat.activate_next_level(secret_exit)
   if mem(u8, WRAM.level_exit_type) == 0x80 and mem(u8, WRAM.midway_point) == 1 then
     if secret_exit then
-      w8(WRAM.level_exit_type, 0x2)
+      wmem(w8, WRAM.level_exit_type, 2)
     else
-      w8(WRAM.level_exit_type, 1)
+      wmem(w8, WRAM.level_exit_type, 1)
     end
   end
 
@@ -5602,13 +5607,13 @@ end
 --      start + select + B to exit the level without activating any exits
 function Cheat.beat_level()
   if Is_paused and Joypad["Select"] and (Joypad["X"] or Joypad["A"] or Joypad["B"]) then
-    w8(WRAM.level_flag_table + Translevel_index, bit.bor(Level_flag, 0x80))
+    wmem(w8, WRAM.level_flag_table, bit.bor(Level_flag, 0x80), Translevel_index)
 
     local secret_exit = Joypad["A"]
     if not Joypad["B"] then
-      w8(WRAM.midway_point, 1)
+      wmem(w8, WRAM.midway_point, 1)
     else
-      w8(WRAM.midway_point, 0)
+      wmem(w8, WRAM.midway_point, 0)
     end
 
     Cheat.activate_next_level(secret_exit)
@@ -5631,7 +5636,7 @@ function Cheat.free_movement()
   end
   
   if not Cheat.under_free_move then
-    if Previous.under_free_move then w8(WRAM.frozen, 0) end
+    if Previous.under_free_move then wmem(w8, WRAM.frozen, 0) end
     return
   end
 
@@ -5651,22 +5656,22 @@ function Cheat.free_movement()
 
     -- Freeze player to avoid deaths
     if movement_mode == 0 then
-      w8(WRAM.frozen, 1)
-      w8(WRAM.x_speed, 0)
-      w8(WRAM.y_speed, 0)
+      wmem(w8, WRAM.frozen, 1)
+      wmem(w8, WRAM.x_speed, 0)
+      wmem(w8, WRAM.y_speed, 0)
 
       -- animate sprites by incrementing the effective frame
-      w8(WRAM.effective_frame, (mem(u8, WRAM.effective_frame) + 1) % 256)
+      wmem(w8, WRAM.effective_frame, (mem(u8, WRAM.effective_frame) + 1) % 256)
     else
-      w8(WRAM.frozen, 0)
+      wmem(w8, WRAM.frozen, 0)
     end
 
     -- Store the values
-    w16(WRAM.x, x_pos)
-    w16(WRAM.y, y_pos)
-    w8(WRAM.invisibility_timer, 127)
-    w8(WRAM.vertical_scroll_flag_header, 1)  -- free vertical scrolling
-    w8(WRAM.vertical_scroll_enabled, 1)
+    wmem(w16, WRAM.x, x_pos)
+    wmem(w16, WRAM.y, y_pos)
+    wmem(w8, WRAM.invisibility_timer, 127)
+    wmem(w8, WRAM.vertical_scroll_flag_header, 1)  -- free vertical scrolling
+    wmem(w8, WRAM.vertical_scroll_enabled, 1)
   
   -- For the overworld
   elseif Game_mode == SMW.game_mode_overworld then
@@ -5686,13 +5691,13 @@ function Cheat.free_movement()
     if Joypad["Down"] then y_pos = y_pos + pixels end
     
     -- Prevent normal level walking
-    w8(WRAM.OW_action_pointer, 3) -- #$03 = Standing still on a level tile
+    wmem(w8, WRAM.OW_action_pointer, 3) -- #$03 = Standing still on a level tile
     
     -- Store the values
     --if mem(u16, WRAM.OW_x, offset) ~= x_pos
     if Effective_frame % 4 == 0 then
-      w16(WRAM.OW_x + offset, x_pos)
-      w16(WRAM.OW_y + offset, y_pos)
+      wmem(w16, WRAM.OW_x, x_pos, offset)
+      wmem(w16, WRAM.OW_y, y_pos, offset)
     end
     
   end
@@ -5716,10 +5721,10 @@ function Cheat.drag_sprite(id)
   local sprite_yhigh = floor(ygame/256)
   local sprite_ylow = ygame - 256*sprite_yhigh
 
-  w8(WRAM.sprite_x_high + id, sprite_xhigh)
-  w8(WRAM.sprite_x_low + id, sprite_xlow)
-  w8(WRAM.sprite_y_high + id, sprite_yhigh)
-  w8(WRAM.sprite_y_low + id, sprite_ylow)
+  wmem(w8, WRAM.sprite_x_high + id, sprite_xhigh)
+  wmem(w8, WRAM.sprite_x_low + id, sprite_xlow)
+  wmem(w8, WRAM.sprite_y_high + id, sprite_yhigh)
+  wmem(w8, WRAM.sprite_y_low + id, sprite_ylow)
 end
 
 
@@ -5740,7 +5745,7 @@ function Cheat.score()
   end
 
   num = is_hex and num or num/10
-  w24(WRAM.mario_score, num)
+  wmem(w24, WRAM.mario_score, num)
 
   print(fmt("Cheat: score set to %d0.", num))
   Cheat.is_cheating = true
@@ -5760,10 +5765,10 @@ function Cheat.timer()
     return
   end
 
-  w16(WRAM.timer, 0)
-  if num >= 0 then w8(WRAM.timer + 2, luap.read_digit(num, 1, 10, "right to left")) end
-  if num > 9  then w8(WRAM.timer + 1, luap.read_digit(num, 2, 10, "right to left")) end
-  if num > 99 then w8(WRAM.timer + 0, luap.read_digit(num, 3, 10, "right to left")) end
+  wmem(w16, WRAM.timer, 0)
+  if num >= 0 then wmem(w8, WRAM.timer, luap.read_digit(num, 1, 10, "right to left"), 2) end
+  if num > 9  then wmem(w8, WRAM.timer, luap.read_digit(num, 2, 10, "right to left"), 1) end
+  if num > 99 then wmem(w8, WRAM.timer, luap.read_digit(num, 3, 10, "right to left"), 0) end
 
   print(fmt("Cheat: timer set to %03d", num))
   Cheat.is_cheating = true
@@ -5773,7 +5778,7 @@ end
 -- BizHawk: modifies address <address> value from <current> to <current + modification>
 -- [size] is the optional size in bytes of the address
 -- TODO: [is_signed] is untrue if the value is unsigned, true otherwise
-function Cheat.change_address(address, value_form, size, is_hex, criterion, error_message, success_message)
+function Cheat.change_address(address, address_offset, value_form, size, is_hex, criterion, error_message, success_message)
   if not Cheat.allow_cheats then
     print("Cheats not allowed.")
     return
@@ -5809,7 +5814,7 @@ function Cheat.change_address(address, value_form, size, is_hex, criterion, erro
   end
 
   local memoryf = (size == 1 and w8) or (size == 2 and w16) or (size == 3 and w24) or error"size is too big"
-  memoryf(address, new)
+  wmem(memoryf, address, new, address_offset)
   print(fmt("Cheat: %s set to %d.", success_message, new) or fmt("Cheat: set WRAM 0x%X to %d.", address, new))
   Cheat.is_cheating = true
 end
@@ -6307,7 +6312,7 @@ function Options_form.create_window()
   
   -- Powerup cheat
   yform = yform + 1.5*delta_y
-  Options_form.cheat_powerup = forms.button(Options_form.form, "Powerup", function() Cheat.change_address(WRAM.powerup, "powerup_number", 1, false,
+  Options_form.cheat_powerup = forms.button(Options_form.form, "Powerup", function() Cheat.change_address(WRAM.powerup, nil, "powerup_number", 1, false,
     nil, "Enter a valid integer (0-255).", "powerup")
   end, xform, yform, 57, 24)
   forms.setproperty(Options_form.cheat_powerup, "Enabled", Cheat.allow_cheats)
@@ -6327,7 +6332,7 @@ function Options_form.create_window()
 
   -- Coin cheat
   xform = xform + 60
-  Options_form.cheat_coin = forms.button(Options_form.form, "Coin", function() Cheat.change_address(WRAM.player_coin, "coin_number", 1, false,
+  Options_form.cheat_coin = forms.button(Options_form.form, "Coin", function() Cheat.change_address(WRAM.player_coin, nil, "coin_number", 1, false,
     function(num) return num < 100 end, "Enter an integer between 0 and 99.", "coin")
   end, xform, yform, 43, 24)
   forms.setproperty(Options_form.cheat_coin, "Enabled", Cheat.allow_cheats)
@@ -6348,7 +6353,7 @@ function Options_form.create_window()
   -- Item box cheat
   xform = 4
   yform = yform + 28
-  Options_form.cheat_item_box = forms.button(Options_form.form, "Item box", function() Cheat.change_address(WRAM.item_box, "item_box_number", 1, true,
+  Options_form.cheat_item_box = forms.button(Options_form.form, "Item box", function() Cheat.change_address(WRAM.item_box, nil, "item_box_number", 1, true,
     nil, "Enter a valid integer (0-255).", "Item box")
   end, xform, yform, 60, 24)
   forms.setproperty(Options_form.cheat_item_box, "Enabled", Cheat.allow_cheats)
@@ -6367,10 +6372,10 @@ function Options_form.create_window()
   xform = 4
   yform = yform + 28
   Options_form.cheat_position = forms.button(Options_form.form, "Position", function()
-    Cheat.change_address(WRAM.x, "player_x", 2, false, nil, "Enter a valid x position", "x position")
-    Cheat.change_address(WRAM.x_sub, "player_x_sub", 1, true, nil, "Enter a valid x subpixel", "x subpixel")
-    Cheat.change_address(WRAM.y, "player_y", 2, false, nil, "Enter a valid y position", "y position")
-    Cheat.change_address(WRAM.y_sub, "player_y_sub", 1, true, nil, "Enter a valid y subpixel", "y subpixel")
+    Cheat.change_address(WRAM.x, nil, "player_x", 2, false, nil, "Enter a valid x position", "x position")
+    Cheat.change_address(WRAM.x_sub, nil, "player_x_sub", 1, true, nil, "Enter a valid x subpixel", "x subpixel")
+    Cheat.change_address(WRAM.y, nil, "player_y", 2, false, nil, "Enter a valid y position", "y position")
+    Cheat.change_address(WRAM.y_sub, nil, "player_y_sub", 1, true, nil, "Enter a valid y subpixel", "y subpixel")
   end, xform, yform, 60, 24)
   forms.setproperty(Options_form.cheat_position, "Enabled", Cheat.allow_cheats)
 
@@ -6391,10 +6396,10 @@ function Options_form.create_window()
   -- Speed cheat
   xform = xform + 60
   Options_form.cheat_speed = forms.button(Options_form.form, "Speed", function()
-    Cheat.change_address(WRAM.x_speed, "player_x_speed", 1, false, nil, "Enter a valid x speed", "x speed")
-    Cheat.change_address(WRAM.x_subspeed, "player_x_subspeed", 1, true, nil, "Enter a valid x subspeed", "x subspeed")
-    Cheat.change_address(WRAM.y_speed, "player_y_speed", 1, false, nil, "Enter a valid y speed", "speed")
-    Cheat.change_address(WRAM.p_meter, "player_meter", 1, false, nil, "Enter a valid p-meter", "p-meter")
+    Cheat.change_address(WRAM.x_speed, nil, "player_x_speed", 1, false, nil, "Enter a valid x speed", "x speed")
+    Cheat.change_address(WRAM.x_subspeed, nil, "player_x_subspeed", 1, true, nil, "Enter a valid x subspeed", "x subspeed")
+    Cheat.change_address(WRAM.y_speed, nil, "player_y_speed", 1, false, nil, "Enter a valid y speed", "speed")
+    Cheat.change_address(WRAM.p_meter, nil, "player_meter", 1, false, nil, "Enter a valid p-meter", "p-meter")
   end, xform, yform, 60, 24)
   forms.setproperty(Options_form.cheat_speed, "Enabled", Cheat.allow_cheats)
 
@@ -6416,7 +6421,7 @@ function Options_form.create_window()
   xform, yform = 4, yform + 1.5*delta_y                  -- CURRENTLY WORKING ON TONGUE POINTER!!!
   Options_form.cheat_debug = forms.button(Options_form.form, "Tongue", function()
     if Yoshi_id then-- CURRENTLY WORKING ON TONGUE POINTER!!!
-      Cheat.change_address(WRAM.sprite_misc_1594 + Yoshi_id, "debug_value", 1, true, nil, "Enter a valid integer (00-FF).", "$1594,x")-- CURRENTLY WORKING ON TONGUE POINTER!!!
+      Cheat.change_address(WRAM.sprite_misc_1594, Yoshi_id, "debug_value", 1, true, nil, "Enter a valid integer (00-FF).", "$1594,x")-- CURRENTLY WORKING ON TONGUE POINTER!!!
     else
       print("This Tongue Pointer cheat only works if there's a slot with Yoshi!")-- CURRENTLY WORKING ON TONGUE POINTER!!!
     end
@@ -6431,7 +6436,7 @@ function Options_form.create_window()
   xform = xform + 59
   Options_form.cheat_tongue_slot = forms.button(Options_form.form, "Slot", function()
     if Yoshi_id then
-      Cheat.change_address(WRAM.sprite_misc_160e + Yoshi_id, "tongue_slot_value", 1, true, nil, "Enter a valid integer (00-FF).", "$160E,x")
+      Cheat.change_address(WRAM.sprite_misc_160e, Yoshi_id, "tongue_slot_value", 1, true, nil, "Enter a valid integer (00-FF).", "$160E,x")
     else
       print("This Tongue Slot cheat only works if there's a slot with Yoshi!")
     end
@@ -6445,7 +6450,7 @@ function Options_form.create_window()
   -- Swallow timer cheat
   xform = xform + 59
   Options_form.cheat_swallow_timer = forms.button(Options_form.form, "Swallow", function()
-    Cheat.change_address(WRAM.swallow_timer, "swallow_timer_value", 1, true, nil, "Enter a valid integer (00-FF).", "$15AC")
+    Cheat.change_address(WRAM.swallow_timer, nil, "swallow_timer_value", 1, true, nil, "Enter a valid integer (00-FF).", "$15AC")
   end, xform, yform, 57, 24)
   forms.setproperty(Options_form.cheat_swallow_timer, "Enabled", Cheat.allow_cheats)
 
@@ -6588,7 +6593,7 @@ function Options_form.create_window()
   xform = xform + 140
   -- top gap
   forms.button(Options_form.form, "-", function()
-    if OPTIONS.top_gap - 10 >= BIZHAWK_FONT_HEIGHT then OPTIONS.top_gap = OPTIONS.top_gap - 10 end
+    if OPTIONS.top_gap - 10 >= draw.BIZHAWK_FONT_HEIGHT then OPTIONS.top_gap = OPTIONS.top_gap - 10 end
     client.SetGameExtraPadding(OPTIONS.left_gap, OPTIONS.top_gap, OPTIONS.right_gap, OPTIONS.bottom_gap)
   end, xform, yform, 24, 24)
   xform = xform + 24
@@ -6599,7 +6604,7 @@ function Options_form.create_window()
   -- left gap
   xform, yform = xform - 3*24, yform + 24
   forms.button(Options_form.form, "-", function()
-    if OPTIONS.left_gap - 10 >= BIZHAWK_FONT_HEIGHT then OPTIONS.left_gap = OPTIONS.left_gap - 10 end
+    if OPTIONS.left_gap - 10 >= draw.BIZHAWK_FONT_HEIGHT then OPTIONS.left_gap = OPTIONS.left_gap - 10 end
     client.SetGameExtraPadding(OPTIONS.left_gap, OPTIONS.top_gap, OPTIONS.right_gap, OPTIONS.bottom_gap)
   end, xform, yform, 24, 24)
   xform = xform + 24
@@ -6610,7 +6615,7 @@ function Options_form.create_window()
   -- right gap
   xform = xform + 3*24
   forms.button(Options_form.form, "-", function()
-    if OPTIONS.right_gap - 10 >= BIZHAWK_FONT_HEIGHT then OPTIONS.right_gap = OPTIONS.right_gap - 10 end
+    if OPTIONS.right_gap - 10 >= draw.BIZHAWK_FONT_HEIGHT then OPTIONS.right_gap = OPTIONS.right_gap - 10 end
     client.SetGameExtraPadding(OPTIONS.left_gap, OPTIONS.top_gap, OPTIONS.right_gap, OPTIONS.bottom_gap)
   end, xform, yform, 24, 24)
   xform = xform + 24
@@ -6621,7 +6626,7 @@ function Options_form.create_window()
   -- bottom gap
   xform, yform = xform - 3*24, yform + 24
   forms.button(Options_form.form, "-", function()
-    if OPTIONS.bottom_gap - 10 >= BIZHAWK_FONT_HEIGHT then OPTIONS.bottom_gap = OPTIONS.bottom_gap - 10 end
+    if OPTIONS.bottom_gap - 10 >= draw.BIZHAWK_FONT_HEIGHT then OPTIONS.bottom_gap = OPTIONS.bottom_gap - 10 end
     client.SetGameExtraPadding(OPTIONS.left_gap, OPTIONS.top_gap, OPTIONS.right_gap, OPTIONS.bottom_gap)
   end, xform, yform, 24, 24)
   xform = xform + 24
@@ -6984,10 +6989,10 @@ while true do
     -- Checks if options form exits and create a button in case it doesn't
     if Options_form.is_form_closed then
       if User_input.mouse_inwindow then
-        draw.rectangle(0, 0, 14*BIZHAWK_FONT_WIDTH/draw.AR_x, 2*BIZHAWK_FONT_HEIGHT/draw.AR_y - 1, "white", 0xffb0b0b0)
-        draw.line(0, 2*BIZHAWK_FONT_HEIGHT/draw.AR_y - 1, 14*BIZHAWK_FONT_WIDTH/draw.AR_x, 2*BIZHAWK_FONT_HEIGHT/draw.AR_y - 1, 0xff606060)
-        draw.line(14*BIZHAWK_FONT_WIDTH/draw.AR_x, 0, 14*BIZHAWK_FONT_WIDTH/draw.AR_x, 2*BIZHAWK_FONT_HEIGHT/draw.AR_y - 1, 0xff606060)
-        gui.text(draw.Border_left, draw.Border_top + BIZHAWK_FONT_HEIGHT/2 - 1, " Options Menu ")
+        draw.rectangle(0, 0, 14*draw.BIZHAWK_FONT_WIDTH/draw.AR_x, 2*draw.BIZHAWK_FONT_HEIGHT/draw.AR_y - 1, "white", 0xffb0b0b0)
+        draw.line(0, 2*draw.BIZHAWK_FONT_HEIGHT/draw.AR_y - 1, 14*draw.BIZHAWK_FONT_WIDTH/draw.AR_x, 2*draw.BIZHAWK_FONT_HEIGHT/draw.AR_y - 1, 0xff606060)
+        draw.line(14*draw.BIZHAWK_FONT_WIDTH/draw.AR_x, 0, 14*draw.BIZHAWK_FONT_WIDTH/draw.AR_x, 2*draw.BIZHAWK_FONT_HEIGHT/draw.AR_y - 1, 0xff606060)
+        gui.text(draw.Border_left, draw.Border_top + draw.BIZHAWK_FONT_HEIGHT/2 - 1, " Options Menu ")
       end
     end
     
