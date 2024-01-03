@@ -1819,6 +1819,8 @@ local WRAM = {
   camera_scroll_timer = remap(0x1401, "WRAM", 0x1401, "SA1_BWRAM"),
 
   -- Player
+  onscreen_x = remap(0x007e, "WRAM", 0x007e, "SA1_IRAM"),
+  onscreen_y = remap(0x0080, "WRAM", 0x0080, "SA1_IRAM"),
   x = remap(0x0094, "WRAM", 0x0094, "SA1_IRAM"),
   y = remap(0x0096, "WRAM", 0x0096, "SA1_IRAM"),
   previous_x = remap(0x00d1, "WRAM", 0x00d1, "SA1_IRAM"),
@@ -1866,7 +1868,8 @@ local WRAM = {
   yoshi_in_pipe = remap(0x1419, "WRAM", 0x1419, "SA1_BWRAM"),
   yoshi_wings_flag = remap(0x1410, "WRAM", 0x1410, "SA1_BWRAM"),
   -- Off screen tongue
-  layer1_vram_upload = remap(0x18187, "WRAM", 0x18187, "SA1_BWRAM"),
+  layer1_vram_upload_column = remap(0x18187, "WRAM", 0x18187, "SA1_BWRAM"),
+  layer1_vram_upload_row = remap(0x18183, "WRAM", 0x18187, "SA1_BWRAM"),
 
   -- Sprites
   sprite_status = remap(0x14c8, "WRAM", 0x242, "SA1_IRAM"),
@@ -4682,12 +4685,15 @@ special_sprite_property[0x6b] = function(slot) -- Wall springboard (left wall)
   draw.rectangle(x_screen + xoff, y_screen + yoff, sprite_width, sprite_height, COLOUR.sprites_faint)
 
   -- Mario's image
-  local xmario, ymario = mem(u16, 0x7e), mem(u16, 0x80)
+  local xmario, ymario = mem(u16, WRAM.onscreen_x), mem(u16, WRAM.onscreen_y)
   if floor(xmario/256) == 0 and floor(ymario/256) == 0 then
     local y1 = 0x08 + 0x08 + (Yoshi_riding_flag and 0x10 or 0)
     local y2 = 0x21 + (Yoshi_riding_flag and 0x10 or 0) + (Player_powerup == 0 and 2 or 0)
     draw.box(xmario - 6 + 0x8, ymario + y1,xmario + 0x0d, ymario + y2, COLOUR.mario_oam_hitbox, COLOUR.interaction_bg)
   end
+
+  -- OAM based hitboxes don't work with SA1
+  if HAS_SA1 then return end
 
   -- Spheres hitbox
   if t.x_offscreen == 0 and t.y_offscreen == 0 then
@@ -5163,7 +5169,7 @@ local function yoshi()
       -- glitched hitbox for offscreen yoshi
       if yoshi_offscreen ~= 0 then
         -- a weird way of detecting wether tiles were uploaded to VRAM, but seems to work ok.
-        local tongue_is_long = mem(u8, WRAM.layer1_vram_upload) -- shouldn't this be u16?
+        local tongue_is_long = mem(u16, WRAM.layer1_vram_upload_row) + mem(u16, WRAM.layer1_vram_upload_column)
         -- short tongue
         local xoff_os = special_sprite_property.yoshi_tongue_offset(0x00, tongue_len) + 1
         local yoff_os = tile_index + 2
@@ -5721,10 +5727,10 @@ function Cheat.drag_sprite(id)
   local sprite_yhigh = floor(ygame/256)
   local sprite_ylow = ygame - 256*sprite_yhigh
 
-  wmem(w8, WRAM.sprite_x_high + id, sprite_xhigh)
-  wmem(w8, WRAM.sprite_x_low + id, sprite_xlow)
-  wmem(w8, WRAM.sprite_y_high + id, sprite_yhigh)
-  wmem(w8, WRAM.sprite_y_low + id, sprite_ylow)
+  wmem(w8, WRAM.sprite_x_high, sprite_xhigh, id)
+  wmem(w8, WRAM.sprite_x_low, sprite_xlow, id)
+  wmem(w8, WRAM.sprite_y_high, sprite_yhigh, id)
+  wmem(w8, WRAM.sprite_y_low, sprite_ylow, id)
 end
 
 
