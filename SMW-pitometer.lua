@@ -1368,12 +1368,13 @@ end
 biz.snes_core = biz.check_snes_core()
 
 -- Check the name of the ROM domain (might have a difference between different cores)
-local memory_domain_list = memory.getmemorydomainlist()
 local ROM_domain
-for key, domain in ipairs(memory_domain_list) do
+for key, domain in ipairs(memory.getmemorydomainlist()) do
   if domain:find("ROM") then ROM_domain = domain ; break end
 end
 if ROM_domain == nil then error("This core doesn't have ROM domain exposed for the script, please change the core!") end
+local ROM_size_MiB = memory.getmemorydomainsize() / 0x10000
+
 
 -- Check the game name in ROM
 function biz.game_name()
@@ -1751,17 +1752,34 @@ local function remap(reg_address, reg_domain, sa1_address, sa1_domain)
 end
 -- The system bus domain doesn't work on BSNESv115, use this function instead
 local function rom_pointer(pointer)
-  -- Convert pointer from SNES address to PC address (to use ROM_domain instead of "System Bus")
-  local pointer_pc, pointer_pc_bank, pointer_pc_addr
-  pointer_pc_bank = floor(pointer/0x20000)
-  if pointer_pc_bank >= 0x40 then -- HiROM mapping.
-    pointer_pc_bank = pointer_pc_bank - 0x20
-  end
-  pointer_pc_addr = bit.band(pointer, 0xFFFF) - 0x8000*((floor(pointer/0x10000)+1)%2)
-  pointer_pc = pointer_pc_bank*0x10000 + pointer_pc_addr
-  -- print(string.format("Pointer %x resolved to %x", pointer, pointer_pc))
+  local is_extended_rom = (ROM_size_MiB > 4)
+  -- print(fmt("%x MiB", ROM_size_MiB))
 
-  return remap(pointer_pc, ROM_domain, pointer_pc, ROM_domain)
+  -- https://snes.nesdev.org/wiki/Memory_map
+  -- TODO: 8MiB non-SA1 roms?
+  local function lo_rom_pointer()
+    local bank = floor(pointer / 0x10000)
+    local addr = bit.band(pointer, 0xFFFF)
+    -- bank 00..7D addr 8000..FFFF
+    if bank <= 0x7D then return bank * 0x8000 + (addr - 0x8000) end
+    -- bank 80..FF addr 8000..FFFF (mirror)
+    return (bank - 0x80) * 0x8000 + (addr - 0x8000)
+  end
+
+  -- https://github.com/VitorVilela7/SMW-SA1-Pack/blob/master/docs/memory-map-summary.md
+  local function sa1_rom_pointer()
+    local bank = floor(pointer / 0x10000)
+    local addr = bit.band(pointer, 0xFFFF)
+    -- bank 00..3F addr 8000..FFFF
+    if bank <= 0x3F then return bank * 0x8000 + (addr - 0x8000) end
+    -- bank 80..BF addr 8000..FFFF
+    if bank <= 0xBF then return (bank - 0x40) * 0x8000 + (addr - 0x8000) end
+    -- bank C0-FF addr 0000..FFFF (mirror for non-extended roms)
+    return (bank - 0xC0) * 0x10000 + addr + (is_extended_rom and 0x4000000 or 0x0)
+  end
+  -- print(fmt("%06X -> %06X %06X", pointer, lo_rom_pointer(), sa1_rom_pointer()))
+
+  return remap(lo_rom_pointer(), ROM_domain, sa1_rom_pointer(), ROM_domain)
 end
 
 
