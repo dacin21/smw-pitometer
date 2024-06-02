@@ -2068,13 +2068,29 @@ local WRAM = {
 }
 
 local ROM = {
-  -- Map16
-  map16_act_as = remap(0x088000, ROM_domain, 0x3D8000, ROM_domain),
+  -- initalized by rom search
+  map16_act_as = nil, 
   slope_height = rom_pointer(0x00e632),
 
   -- used for off screen tongue
   level_mode_table = remap(0x3E28, ROM_domain, 0x3E28, ROM_domain),
 }
+-- This table can be in various places, e.g.
+-- Type    SYSBUS      CARTROM    
+-- LM2?    438000       218000
+-- LM3?    128000        90000
+-- SA1                  3D8000
+function ROM.find_acts_as_table()
+  local cap = floor(memory.getmemorydomainsize(ROM_domain) / 0x8000)
+  for i = 0, cap-1 do
+    local address = i*0x8000
+    local candidate = remap(address, ROM_domain, address, ROM_domain)
+    if mem(u32, candidate, 0) == 0x00010000 and mem(u32, candidate, 4) == 0x00030002 then return candidate end
+  end
+  print("failed to find map16 acts as table")
+  return remap(0x218000, ROM_domain, 0x3D8000, ROM_domain)
+end
+ROM.map16_act_as = ROM.find_acts_as_table()
 
 local SMW = {
   -- Game Modes
@@ -4870,7 +4886,7 @@ special_sprite_property[0xa0] = function(slot) -- Bowser
   for index = 0, 9 do
     local value = mem(u8, WRAM.bowser_attack_timers, index)
     draw.text(draw.Buffer_width + draw.Border_right, y_text + index*height,
-      fmt("%$2X = %3d", value, value), Sprites_info[slot].info_color, true)
+      fmt("%.2X = %3d", value, value), Sprites_info[slot].info_color, true)
   end
 end
 
