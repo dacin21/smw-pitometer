@@ -16,6 +16,11 @@
 --##                                                                   ##
 --#######################################################################
 
+-- bit functions that got removed in bizhawk 2.9
+if not bit.band then
+    bit = (require "migration_helpers").EmuHawk_pre_2_9_bit();
+end
+
 --#######################################################################
 -- CONFIG (YOU PROBABLY WANT TO EDIT THE SMW-pitometer-config.ini FILE INSTEAD OF THIS)
 
@@ -95,10 +100,10 @@ config.DEFAULT_OPTIONS = {
   draw_tiles_with_click = true,
   max_tiles_drawn = 40,  -- the max number of tiles to be drawn/registered by the script
   display_mouse_coordinates = false,
-  left_gap = 8*(12 + 6),
-  right_gap = (20*10/2)+2,  -- (36 maximum chars of the sprite info)*(10 pixels of BizHawk font width)/(2, the scale)+(2 to make it fit better)
+  left_gap = 84,
+  right_gap = 82,  -- (36 maximum chars of the sprite info)*(10 pixels of BizHawk font width)/(2, the scale)+(2 to make it fit better)
   top_gap = 20,
-  bottom_gap = 50,
+  bottom_gap = 30,
   positions_in_hex = false,
   speeds_in_hex = false,
 }
@@ -1122,7 +1127,7 @@ function encode_value(self, value, parents, etc, options, indent)
      if options.pretty then
 
       local KEYS = { }
-      local max_key_length = 0
+      local max_key_length = 1
       for _, key in ipairs(object_keys) do
         local encoded = encode_value(self, tostring(key), parents, etc, options, indent)
         if options.align_keys then
@@ -1725,10 +1730,32 @@ if not IS_SMW then error("\n\nThis script is only for Super Mario World (any SNE
 local HAS_SA1 = false
 if biz.map_mode_rom_type == 0x2334 or biz.map_mode_rom_type == 0x2335 then HAS_SA1 = true end -- TODO: RAM ramaps https://github.com/VitorVilela7/SA1-Pack/blob/master/docs/remap.asm
 
+local domains = {}
+
+domains.has = {}
+for _, d in ipairs(memory.getmemorydomainlist()) do domains.has[d] = true end
+
+function domains.guess(name_1, name_2)
+    if name_1 and domains.has[name_1] then return name_1 end
+    if name_2 and domains.has[name_2] then return name_2 end
+end
+
+-- Different names for the memory domains in Bizhawk 2.8 vs 2.10
+domains.cartram = domains.guess("CARTRIDGE_RAM", "CARTRAM")
+domains.cartrom = domains.guess("CARTRIDGE_ROM", "CARTROM")
+domains.sa1_iram = domains.guess("SA1_IRAM", "SA1 IRAM")
+domains.sa1_bwram = domains.guess("SA1_BWRAM", "SA1 BWRAM")
+domains.wram = "WRAM"
+domains.apuram = "APURAM"
+domains.vram = "VRAM"
+domains.oam = domains.guess("OBJECTS", "OAM")
+domains.gcram = "WRAM"
+domains.system_bus = "System Bus"
+domains.waterbox = "Waterbox PageData"
+
+
 if HAS_SA1 then
-  local domains = {}
-  for _, d in ipairs(memory.getmemorydomainlist()) do domains[d] = true end
-  if not domains['SA1_IRAM'] or not domains['SA1_BWRAM'] then error("This script only supports SA1 hacks in the BSNESv115+ core. Use a modern version of Bizhawk") end
+  if not domains.sa1_iram or not domains.sa1_bwram then error("This script only supports SA1 hacks in the BSNESv115+ core. Use a modern version of Bizhawk") end
 end
 
 -- Memory wrapper for easy SA-1 support
@@ -1786,285 +1813,285 @@ end
 --#############################################################################
 -- SMW ADDRESSES AND CONSTANTS
 local WRAM = {
-  scratch_0d = remap(0x0d, "WRAM", 0x0d, "SA1_IRAM"),
+  scratch_0d = remap(0x0d, "WRAM", 0x0d, domains.sa1_iram),
   -- I/O
-  ctrl_1_1 = remap(0x0015, "WRAM", 0x0015, "SA1_IRAM"),
-  ctrl_1_2 = remap(0x0017, "WRAM", 0x0017, "SA1_IRAM"),
-  firstctrl_1_1 = remap(0x0016, "WRAM", 0x0016, "SA1_IRAM"),
-  firstctrl_1_2 = remap(0x0018, "WRAM", 0x0018, "SA1_IRAM"),
+  ctrl_1_1 = remap(0x0015, "WRAM", 0x0015, domains.sa1_iram),
+  ctrl_1_2 = remap(0x0017, "WRAM", 0x0017, domains.sa1_iram),
+  firstctrl_1_1 = remap(0x0016, "WRAM", 0x0016, domains.sa1_iram),
+  firstctrl_1_2 = remap(0x0018, "WRAM", 0x0018, domains.sa1_iram),
 
   -- General
-  game_mode = remap(0x0100, "WRAM", 0x0100, "SA1_BWRAM"),
-  real_frame = remap(0x0013, "WRAM", 0x0013, "SA1_IRAM"),
-  effective_frame = remap(0x0014, "WRAM", 0x0014, "SA1_IRAM"),
-  lag_indicator = remap(0x01fe, "WRAM", 0x01fe, "SA1_BWRAM"),
-  timer_frame_counter = remap(0x0f30, "WRAM", 0x0f30, "SA1_BWRAM"),
-  RNG = remap(0x148d, "WRAM", 0x148d, "SA1_BWRAM"),
-  RNG_input = remap(0x148b, "WRAM", 0x148b, "SA1_BWRAM"),
-  timer = remap(0x0F31, "WRAM", 0x0F31, "SA1_BWRAM"), -- 3 bytes, one for each digit
-  sprite_data_pointer = remap(0x00CE, "WRAM", 0x00CE, "SA1_IRAM"), -- 3 bytes
-  layer1_data_pointer = remap(0x0065, "WRAM", 0x0065, "SA1_IRAM"), -- 3 bytes
-  layer2_data_pointer = remap(0x0068, "WRAM", 0x0068, "SA1_IRAM"), -- 3 bytes
-  slope_data_pointer = remap(0x0082, "WRAM", 0x0082, "SA1_IRAM"), -- 3 bytes
-  sprite_memory_header = remap(0x1692, "WRAM", 0x1692, "SA1_BWRAM"),
-  lock_animation_flag = remap(0x009d, "WRAM", 0x009d, "SA1_IRAM"), -- Most codes will still run if this is set, but almost nothing will move or animate.
-  level_mode_settings = remap(0x1925, "WRAM", 0x1925, "SA1_BWRAM"),
-  star_road_speed = remap(0x1df7, "WRAM", 0x1df7, "SA1_BWRAM"),
-  star_road_timer = remap(0x1df8, "WRAM", 0x1df8, "SA1_BWRAM"),
-  current_character = remap(0x0db3, "WRAM", 0x0db3, "SA1_BWRAM"), -- #00 = Mario, #01 = Luigi
-  exit_counter = remap(0x1F2E, "WRAM", 0x1F2E, "SA1_BWRAM"),
-  event_flags = remap(0x1F02, "WRAM", 0x1F02, "SA1_BWRAM"), -- 15 bytes (1 bit per exit)
-  current_submap = remap(0x1F11, "WRAM", 0x1F11, "SA1_BWRAM"),
-  OW_tile_translevel = remap(0xD000, "WRAM", 0xD000, "SA1_BWRAM"), -- 0x800 bytes table
-  OW_action_pointer = remap(0x13D9, "WRAM", 0x13D9, "SA1_BWRAM"),
-  OW_player_animation = remap(0x1F13, "WRAM", 0x1F13, "SA1_BWRAM"), -- 2 bytes for Mario, 2 bytes for Luigi
+  game_mode = remap(0x0100, "WRAM", 0x0100, domains.sa1_bwram),
+  real_frame = remap(0x0013, "WRAM", 0x0013, domains.sa1_iram),
+  effective_frame = remap(0x0014, "WRAM", 0x0014, domains.sa1_iram),
+  lag_indicator = remap(0x01fe, "WRAM", 0x01fe, domains.sa1_bwram),
+  timer_frame_counter = remap(0x0f30, "WRAM", 0x0f30, domains.sa1_bwram),
+  RNG = remap(0x148d, "WRAM", 0x148d, domains.sa1_bwram),
+  RNG_input = remap(0x148b, "WRAM", 0x148b, domains.sa1_bwram),
+  timer = remap(0x0F31, "WRAM", 0x0F31, domains.sa1_bwram), -- 3 bytes, one for each digit
+  sprite_data_pointer = remap(0x00CE, "WRAM", 0x00CE, domains.sa1_iram), -- 3 bytes
+  layer1_data_pointer = remap(0x0065, "WRAM", 0x0065, domains.sa1_iram), -- 3 bytes
+  layer2_data_pointer = remap(0x0068, "WRAM", 0x0068, domains.sa1_iram), -- 3 bytes
+  slope_data_pointer = remap(0x0082, "WRAM", 0x0082, domains.sa1_iram), -- 3 bytes
+  sprite_memory_header = remap(0x1692, "WRAM", 0x1692, domains.sa1_bwram),
+  lock_animation_flag = remap(0x009d, "WRAM", 0x009d, domains.sa1_iram), -- Most codes will still run if this is set, but almost nothing will move or animate.
+  level_mode_settings = remap(0x1925, "WRAM", 0x1925, domains.sa1_bwram),
+  star_road_speed = remap(0x1df7, "WRAM", 0x1df7, domains.sa1_bwram),
+  star_road_timer = remap(0x1df8, "WRAM", 0x1df8, domains.sa1_bwram),
+  current_character = remap(0x0db3, "WRAM", 0x0db3, domains.sa1_bwram), -- #00 = Mario, #01 = Luigi
+  exit_counter = remap(0x1F2E, "WRAM", 0x1F2E, domains.sa1_bwram),
+  event_flags = remap(0x1F02, "WRAM", 0x1F02, domains.sa1_bwram), -- 15 bytes (1 bit per exit)
+  current_submap = remap(0x1F11, "WRAM", 0x1F11, domains.sa1_bwram),
+  OW_tile_translevel = remap(0xD000, "WRAM", 0xD000, domains.sa1_bwram), -- 0x800 bytes table
+  OW_action_pointer = remap(0x13D9, "WRAM", 0x13D9, domains.sa1_bwram),
+  OW_player_animation = remap(0x1F13, "WRAM", 0x1F13, domains.sa1_bwram), -- 2 bytes for Mario, 2 bytes for Luigi
 
   -- Camera
-  layer1_x_mirror = remap(0x001a, "WRAM", 0x001a, "SA1_IRAM"),
-  layer1_y_mirror = remap(0x001c, "WRAM", 0x001c, "SA1_IRAM"),
-  layer1_VRAM_left_up = remap(0x004d, "WRAM", 0x004d, "SA1_IRAM"),
-  layer1_VRAM_right_down = remap(0x004f, "WRAM", 0x004f, "SA1_IRAM"),
-  camera_x = remap(0x1462, "WRAM", 0x1462, "SA1_BWRAM"),
-  camera_y = remap(0x1464, "WRAM", 0x1464, "SA1_BWRAM"),
-  camera_left_limit = remap(0x142c, "WRAM", 0x142c, "SA1_BWRAM"),
-  camera_right_limit = remap(0x142e, "WRAM", 0x142e, "SA1_BWRAM"),
-  screen_mode = remap(0x005B, "WRAM", 0x005B, "SA1_IRAM"),
-  screens_number = remap(0x005d, "WRAM", 0x005d, "SA1_IRAM"),
-  hscreen_number = remap(0x005e, "WRAM", 0x005e, "SA1_IRAM"),
-  vscreen_number = remap(0x005f, "WRAM", 0x005f, "SA1_IRAM"),
-  vertical_scroll_flag_header = remap(0x1412, "WRAM", 0x1412, "SA1_BWRAM"),  -- #$00 = Disable; #$01 = Enable; #$02 = Enable if flying/climbing/etc.
-  vertical_scroll_enabled = remap(0x13f1, "WRAM", 0x13f1, "SA1_BWRAM"),
-  camera_scroll_timer = remap(0x1401, "WRAM", 0x1401, "SA1_BWRAM"),
+  layer1_x_mirror = remap(0x001a, "WRAM", 0x001a, domains.sa1_iram),
+  layer1_y_mirror = remap(0x001c, "WRAM", 0x001c, domains.sa1_iram),
+  layer1_VRAM_left_up = remap(0x004d, "WRAM", 0x004d, domains.sa1_iram),
+  layer1_VRAM_right_down = remap(0x004f, "WRAM", 0x004f, domains.sa1_iram),
+  camera_x = remap(0x1462, "WRAM", 0x1462, domains.sa1_bwram),
+  camera_y = remap(0x1464, "WRAM", 0x1464, domains.sa1_bwram),
+  camera_left_limit = remap(0x142c, "WRAM", 0x142c, domains.sa1_bwram),
+  camera_right_limit = remap(0x142e, "WRAM", 0x142e, domains.sa1_bwram),
+  screen_mode = remap(0x005B, "WRAM", 0x005B, domains.sa1_iram),
+  screens_number = remap(0x005d, "WRAM", 0x005d, domains.sa1_iram),
+  hscreen_number = remap(0x005e, "WRAM", 0x005e, domains.sa1_iram),
+  vscreen_number = remap(0x005f, "WRAM", 0x005f, domains.sa1_iram),
+  vertical_scroll_flag_header = remap(0x1412, "WRAM", 0x1412, domains.sa1_bwram),  -- #$00 = Disable; #$01 = Enable; #$02 = Enable if flying/climbing/etc.
+  vertical_scroll_enabled = remap(0x13f1, "WRAM", 0x13f1, domains.sa1_bwram),
+  camera_scroll_timer = remap(0x1401, "WRAM", 0x1401, domains.sa1_bwram),
 
   -- Player
-  onscreen_x = remap(0x007e, "WRAM", 0x007e, "SA1_IRAM"),
-  onscreen_y = remap(0x0080, "WRAM", 0x0080, "SA1_IRAM"),
-  x = remap(0x0094, "WRAM", 0x0094, "SA1_IRAM"),
-  y = remap(0x0096, "WRAM", 0x0096, "SA1_IRAM"),
-  previous_x = remap(0x00d1, "WRAM", 0x00d1, "SA1_IRAM"),
-  previous_y = remap(0x00d3, "WRAM", 0x00d3, "SA1_IRAM"),
-  x_sub = remap(0x13da, "WRAM", 0x13da, "SA1_BWRAM"),
-  y_sub = remap(0x13dc, "WRAM", 0x13dc, "SA1_BWRAM"),
-  x_speed = remap(0x007b, "WRAM", 0x007b, "SA1_IRAM"),
-  x_subspeed = remap(0x007a, "WRAM", 0x007a, "SA1_IRAM"),
-  y_speed = remap(0x007d, "WRAM", 0x007d, "SA1_IRAM"),
-  direction = remap(0x0076, "WRAM", 0x0076, "SA1_IRAM"),
-  is_ducking = remap(0x0073, "WRAM", 0x0073, "SA1_IRAM"),
-  p_meter = remap(0x13e4, "WRAM", 0x13e4, "SA1_BWRAM"),
-  take_off = remap(0x149f, "WRAM", 0x149f, "SA1_BWRAM"),
-  powerup = remap(0x0019, "WRAM", 0x0019, "SA1_IRAM"),
-  cape_spin = remap(0x14a6, "WRAM", 0x14a6, "SA1_BWRAM"),
-  cape_fall = remap(0x14a5, "WRAM", 0x14a5, "SA1_BWRAM"),
-  cape_interaction = remap(0x13e8, "WRAM", 0x13e8, "SA1_BWRAM"),
-  flight_animation = remap(0x1407, "WRAM", 0x1407, "SA1_BWRAM"),
-  cape_gliding_index = remap(0x1408, "WRAM", 0x1408, "SA1_BWRAM"),
-  diving_status = remap(0x1409, "WRAM", 0x1409, "SA1_BWRAM"),
-  diving_status_timer = remap(0x14a4, "WRAM", 0x14a4, "SA1_BWRAM"),
-  player_animation_trigger = remap(0x0071, "WRAM", 0x0071, "SA1_IRAM"),
-  climbing_status = remap(0x0074, "WRAM", 0x0074, "SA1_IRAM"),
-  spinjump_flag = remap(0x140d, "WRAM", 0x140d, "SA1_BWRAM"),
-  player_blocked_status = remap(0x0077, "WRAM", 0x0077, "SA1_IRAM"),
-  item_box = remap(0x0dc2, "WRAM", 0x0dc2, "SA1_BWRAM"),
-  cape_x = remap(0x13e9, "WRAM", 0x13e9, "SA1_BWRAM"),
-  cape_y = remap(0x13eb, "WRAM", 0x13eb, "SA1_BWRAM"),
-  on_ground = remap(0x13ef, "WRAM", 0x13ef, "SA1_BWRAM"),
-  on_ground_delay = remap(0x008d, "WRAM", 0x008d, "SA1_IRAM"),
-  on_air = remap(0x0072, "WRAM", 0x0072, "SA1_IRAM"),
-  on_water = remap(0x0075, "WRAM", 0x0075, "SA1_IRAM"),
-  can_jump_from_water = remap(0x13fa, "WRAM", 0x13fa, "SA1_BWRAM"),
-  carrying_item = remap(0x148f, "WRAM", 0x148f, "SA1_BWRAM"),
-  player_pose_turning = remap(0x1499, "WRAM", 0x1499, "SA1_BWRAM"),
-  mario_score = remap(0x0f34, "WRAM", 0x0f34, "SA1_BWRAM"),
-  player_coin = remap(0x0dbf, "WRAM", 0x0dbf, "SA1_BWRAM"),
-  player_looking_up = remap(0x13de, "WRAM", 0x13de, "SA1_BWRAM"),
-  OW_x = remap(0x1f17, "WRAM", 0x1f17, "SA1_BWRAM"),
-  OW_y = remap(0x1f19, "WRAM", 0x1f19, "SA1_BWRAM"),
+  onscreen_x = remap(0x007e, "WRAM", 0x007e, domains.sa1_iram),
+  onscreen_y = remap(0x0080, "WRAM", 0x0080, domains.sa1_iram),
+  x = remap(0x0094, "WRAM", 0x0094, domains.sa1_iram),
+  y = remap(0x0096, "WRAM", 0x0096, domains.sa1_iram),
+  previous_x = remap(0x00d1, "WRAM", 0x00d1, domains.sa1_iram),
+  previous_y = remap(0x00d3, "WRAM", 0x00d3, domains.sa1_iram),
+  x_sub = remap(0x13da, "WRAM", 0x13da, domains.sa1_bwram),
+  y_sub = remap(0x13dc, "WRAM", 0x13dc, domains.sa1_bwram),
+  x_speed = remap(0x007b, "WRAM", 0x007b, domains.sa1_iram),
+  x_subspeed = remap(0x007a, "WRAM", 0x007a, domains.sa1_iram),
+  y_speed = remap(0x007d, "WRAM", 0x007d, domains.sa1_iram),
+  direction = remap(0x0076, "WRAM", 0x0076, domains.sa1_iram),
+  is_ducking = remap(0x0073, "WRAM", 0x0073, domains.sa1_iram),
+  p_meter = remap(0x13e4, "WRAM", 0x13e4, domains.sa1_bwram),
+  take_off = remap(0x149f, "WRAM", 0x149f, domains.sa1_bwram),
+  powerup = remap(0x0019, "WRAM", 0x0019, domains.sa1_iram),
+  cape_spin = remap(0x14a6, "WRAM", 0x14a6, domains.sa1_bwram),
+  cape_fall = remap(0x14a5, "WRAM", 0x14a5, domains.sa1_bwram),
+  cape_interaction = remap(0x13e8, "WRAM", 0x13e8, domains.sa1_bwram),
+  flight_animation = remap(0x1407, "WRAM", 0x1407, domains.sa1_bwram),
+  cape_gliding_index = remap(0x1408, "WRAM", 0x1408, domains.sa1_bwram),
+  diving_status = remap(0x1409, "WRAM", 0x1409, domains.sa1_bwram),
+  diving_status_timer = remap(0x14a4, "WRAM", 0x14a4, domains.sa1_bwram),
+  player_animation_trigger = remap(0x0071, "WRAM", 0x0071, domains.sa1_iram),
+  climbing_status = remap(0x0074, "WRAM", 0x0074, domains.sa1_iram),
+  spinjump_flag = remap(0x140d, "WRAM", 0x140d, domains.sa1_bwram),
+  player_blocked_status = remap(0x0077, "WRAM", 0x0077, domains.sa1_iram),
+  item_box = remap(0x0dc2, "WRAM", 0x0dc2, domains.sa1_bwram),
+  cape_x = remap(0x13e9, "WRAM", 0x13e9, domains.sa1_bwram),
+  cape_y = remap(0x13eb, "WRAM", 0x13eb, domains.sa1_bwram),
+  on_ground = remap(0x13ef, "WRAM", 0x13ef, domains.sa1_bwram),
+  on_ground_delay = remap(0x008d, "WRAM", 0x008d, domains.sa1_iram),
+  on_air = remap(0x0072, "WRAM", 0x0072, domains.sa1_iram),
+  on_water = remap(0x0075, "WRAM", 0x0075, domains.sa1_iram),
+  can_jump_from_water = remap(0x13fa, "WRAM", 0x13fa, domains.sa1_bwram),
+  carrying_item = remap(0x148f, "WRAM", 0x148f, domains.sa1_bwram),
+  player_pose_turning = remap(0x1499, "WRAM", 0x1499, domains.sa1_bwram),
+  mario_score = remap(0x0f34, "WRAM", 0x0f34, domains.sa1_bwram),
+  player_coin = remap(0x0dbf, "WRAM", 0x0dbf, domains.sa1_bwram),
+  player_looking_up = remap(0x13de, "WRAM", 0x13de, domains.sa1_bwram),
+  OW_x = remap(0x1f17, "WRAM", 0x1f17, domains.sa1_bwram),
+  OW_y = remap(0x1f19, "WRAM", 0x1f19, domains.sa1_bwram),
 
   -- Yoshi
-  yoshi_riding_flag = remap(0x187a, "WRAM", 0x187a, "SA1_BWRAM"),  -- #$00 = No, #$01 = Yes, #$02 = Yes, and turning around.
-  yoshi_tile_pos = remap(0x0d8c, "WRAM", 0x0d8c, "SA1_BWRAM"),
-  yoshi_in_pipe = remap(0x1419, "WRAM", 0x1419, "SA1_BWRAM"),
-  yoshi_wings_flag = remap(0x1410, "WRAM", 0x1410, "SA1_BWRAM"),
+  yoshi_riding_flag = remap(0x187a, "WRAM", 0x187a, domains.sa1_bwram),  -- #$00 = No, #$01 = Yes, #$02 = Yes, and turning around.
+  yoshi_tile_pos = remap(0x0d8c, "WRAM", 0x0d8c, domains.sa1_bwram),
+  yoshi_in_pipe = remap(0x1419, "WRAM", 0x1419, domains.sa1_bwram),
+  yoshi_wings_flag = remap(0x1410, "WRAM", 0x1410, domains.sa1_bwram),
   -- Off screen tongue
-  layer1_vram_upload_column = remap(0x18187, "WRAM", 0x18187, "SA1_BWRAM"),
-  layer1_vram_upload_row = remap(0x18183, "WRAM", 0x18187, "SA1_BWRAM"),
+  layer1_vram_upload_column = remap(0x18187, "WRAM", 0x18187, domains.sa1_bwram),
+  layer1_vram_upload_row = remap(0x18183, "WRAM", 0x18187, domains.sa1_bwram),
 
   -- Sprites
-  sprite_status = remap(0x14c8, "WRAM", 0x242, "SA1_IRAM"),
-  sprite_number = remap(0x009e, "WRAM", 0x200, "SA1_IRAM"),
-  sprite_x_high = remap(0x14e0, "WRAM", 0x26e, "SA1_IRAM"),
-  sprite_x_low = remap(0x00e4, "WRAM", 0x22c, "SA1_IRAM"),
-  sprite_y_high = remap(0x14d4, "WRAM", 0x258, "SA1_IRAM"),
-  sprite_y_low = remap(0x00d8, "WRAM", 0x216, "SA1_IRAM"),
-  sprite_x_sub = remap(0x14f8, "WRAM", 0x014de, "SA1_BWRAM"),
-  sprite_y_sub = remap(0x14ec, "WRAM", 0x014c8, "SA1_BWRAM"),
-  sprite_x_speed = remap(0x00b6, "WRAM", 0x0b6, "SA1_IRAM"),
-  sprite_y_speed = remap(0x00aa, "WRAM", 0x09e, "SA1_IRAM"),
-  sprite_y_offscreen = remap(0x186c, "WRAM", 0x01642, "SA1_BWRAM"),
-  sprite_OAM_xoff = remap(0x0304, "WRAM", 0x0304, "SA1_BWRAM"),
-  sprite_OAM_yoff = remap(0x0305, "WRAM", 0x0305, "SA1_BWRAM"),
-  sprite_swap_slot = remap(0x1861, "WRAM", 0x1861, "SA1_BWRAM"),
-  sprite_phase = remap(0x00c2, "WRAM", 0x0d8, "SA1_IRAM"),
-  sprite_misc_1504 = remap(0x1504, "WRAM", 0x014f4, "SA1_BWRAM"),
-  sprite_misc_1510 = remap(0x1510, "WRAM", 0x0150a, "SA1_BWRAM"),
-  sprite_misc_151c = remap(0x151c, "WRAM", 0x284, "SA1_IRAM"),
-  sprite_misc_1528 = remap(0x1528, "WRAM", 0x29a, "SA1_IRAM"),
-  sprite_misc_1534 = remap(0x1534, "WRAM", 0x2b0, "SA1_IRAM"),
-  sprite_stun_timer = remap(0x1540, "WRAM", 0x3c6, "SA1_IRAM"),
-  sprite_player_contact = remap(0x154c, "WRAM", 0x2dc, "SA1_IRAM"),
-  sprite_misc_1558 = remap(0x1558, "WRAM", 0x2f2, "SA1_IRAM"),
-  sprite_sprite_contact = remap(0x1564, "WRAM", 0x308, "SA1_IRAM"),
-  sprite_animation_timer = remap(0x1570, "WRAM", 0x31e, "SA1_IRAM"),
-  sprite_horizontal_direction = remap(0x157c, "WRAM", 0x334, "SA1_IRAM"),
-  sprite_blocked_status = remap(0x1588, "WRAM", 0x34a, "SA1_IRAM"),
-  sprite_misc_1594 = remap(0x1594, "WRAM", 0x360, "SA1_IRAM"),
-  sprite_x_offscreen = remap(0x15a0, "WRAM", 0x376, "SA1_IRAM"),
-  sprite_misc_15ac = remap(0x15ac, "WRAM", 0x38c, "SA1_IRAM"),
-  sprite_being_eaten_flag = remap(0x15d0, "WRAM", 0x0154c, "SA1_BWRAM"),
-  sprite_OAM_index = remap(0x15ea, "WRAM", 0x3a2, "SA1_IRAM"),
-  sprite_misc_1602 = remap(0x1602, "WRAM", 0x3ce, "SA1_IRAM"),
-  sprite_misc_160e = remap(0x160e, "WRAM", 0x3e4, "SA1_IRAM"),
-  sprite_index_to_level = remap(0x161a, "WRAM", 0x01578, "SA1_BWRAM"),
-  sprite_misc_1626 = remap(0x1626, "WRAM", 0x0158e, "SA1_BWRAM"),
-  sprite_behind_scenery = remap(0x1632, "WRAM", 0x015a4, "SA1_BWRAM"),
-  sprite_misc_163e = remap(0x163e, "WRAM", 0x3fa, "SA1_IRAM"),
-  sprite_misc_187b = remap(0x187b, "WRAM", 0x410, "SA1_IRAM"),
-  sprite_underwater = remap(0x164a, "WRAM", 0x015ba, "SA1_BWRAM"),
-  sprite_disable_cape = remap(0x1fe2, "WRAM", 0x01fd6, "SA1_BWRAM"),
-  sprite_1_tweaker = remap(0x1656, "WRAM", 0x015d0, "SA1_BWRAM"),
-  sprite_2_tweaker = remap(0x1662, "WRAM", 0x015ea, "SA1_BWRAM"),
-  sprite_3_tweaker = remap(0x166e, "WRAM", 0x01600, "SA1_BWRAM"),
-  sprite_4_tweaker = remap(0x167a, "WRAM", 0x01616, "SA1_BWRAM"),
-  sprite_5_tweaker = remap(0x1686, "WRAM", 0x0162c, "SA1_BWRAM"),
-  sprite_6_tweaker = remap(0x190f, "WRAM", 0x01658, "SA1_BWRAM"),
-  sprite_tongue_wait = remap(0x14a3, "WRAM", 0x14a3, "SA1_BWRAM"),
-  sprite_yoshi_squatting = remap(0x18af, "WRAM", 0x18af, "SA1_BWRAM"),
-  sprite_buoyancy = remap(0x190e, "WRAM", 0x190e, "SA1_BWRAM"),
-  sprite_load_status_table = remap(0x1938, "WRAM", 0x018a00, "SA1_BWRAM"), -- 128 bytes
+  sprite_status = remap(0x14c8, "WRAM", 0x242, domains.sa1_iram),
+  sprite_number = remap(0x009e, "WRAM", 0x200, domains.sa1_iram),
+  sprite_x_high = remap(0x14e0, "WRAM", 0x26e, domains.sa1_iram),
+  sprite_x_low = remap(0x00e4, "WRAM", 0x22c, domains.sa1_iram),
+  sprite_y_high = remap(0x14d4, "WRAM", 0x258, domains.sa1_iram),
+  sprite_y_low = remap(0x00d8, "WRAM", 0x216, domains.sa1_iram),
+  sprite_x_sub = remap(0x14f8, "WRAM", 0x014de, domains.sa1_bwram),
+  sprite_y_sub = remap(0x14ec, "WRAM", 0x014c8, domains.sa1_bwram),
+  sprite_x_speed = remap(0x00b6, "WRAM", 0x0b6, domains.sa1_iram),
+  sprite_y_speed = remap(0x00aa, "WRAM", 0x09e, domains.sa1_iram),
+  sprite_y_offscreen = remap(0x186c, "WRAM", 0x01642, domains.sa1_bwram),
+  sprite_OAM_xoff = remap(0x0304, "WRAM", 0x0304, domains.sa1_bwram),
+  sprite_OAM_yoff = remap(0x0305, "WRAM", 0x0305, domains.sa1_bwram),
+  sprite_swap_slot = remap(0x1861, "WRAM", 0x1861, domains.sa1_bwram),
+  sprite_phase = remap(0x00c2, "WRAM", 0x0d8, domains.sa1_iram),
+  sprite_misc_1504 = remap(0x1504, "WRAM", 0x014f4, domains.sa1_bwram),
+  sprite_misc_1510 = remap(0x1510, "WRAM", 0x0150a, domains.sa1_bwram),
+  sprite_misc_151c = remap(0x151c, "WRAM", 0x284, domains.sa1_iram),
+  sprite_misc_1528 = remap(0x1528, "WRAM", 0x29a, domains.sa1_iram),
+  sprite_misc_1534 = remap(0x1534, "WRAM", 0x2b0, domains.sa1_iram),
+  sprite_stun_timer = remap(0x1540, "WRAM", 0x3c6, domains.sa1_iram),
+  sprite_player_contact = remap(0x154c, "WRAM", 0x2dc, domains.sa1_iram),
+  sprite_misc_1558 = remap(0x1558, "WRAM", 0x2f2, domains.sa1_iram),
+  sprite_sprite_contact = remap(0x1564, "WRAM", 0x308, domains.sa1_iram),
+  sprite_animation_timer = remap(0x1570, "WRAM", 0x31e, domains.sa1_iram),
+  sprite_horizontal_direction = remap(0x157c, "WRAM", 0x334, domains.sa1_iram),
+  sprite_blocked_status = remap(0x1588, "WRAM", 0x34a, domains.sa1_iram),
+  sprite_misc_1594 = remap(0x1594, "WRAM", 0x360, domains.sa1_iram),
+  sprite_x_offscreen = remap(0x15a0, "WRAM", 0x376, domains.sa1_iram),
+  sprite_misc_15ac = remap(0x15ac, "WRAM", 0x38c, domains.sa1_iram),
+  sprite_being_eaten_flag = remap(0x15d0, "WRAM", 0x0154c, domains.sa1_bwram),
+  sprite_OAM_index = remap(0x15ea, "WRAM", 0x3a2, domains.sa1_iram),
+  sprite_misc_1602 = remap(0x1602, "WRAM", 0x3ce, domains.sa1_iram),
+  sprite_misc_160e = remap(0x160e, "WRAM", 0x3e4, domains.sa1_iram),
+  sprite_index_to_level = remap(0x161a, "WRAM", 0x01578, domains.sa1_bwram),
+  sprite_misc_1626 = remap(0x1626, "WRAM", 0x0158e, domains.sa1_bwram),
+  sprite_behind_scenery = remap(0x1632, "WRAM", 0x015a4, domains.sa1_bwram),
+  sprite_misc_163e = remap(0x163e, "WRAM", 0x3fa, domains.sa1_iram),
+  sprite_misc_187b = remap(0x187b, "WRAM", 0x410, domains.sa1_iram),
+  sprite_underwater = remap(0x164a, "WRAM", 0x015ba, domains.sa1_bwram),
+  sprite_disable_cape = remap(0x1fe2, "WRAM", 0x01fd6, domains.sa1_bwram),
+  sprite_1_tweaker = remap(0x1656, "WRAM", 0x015d0, domains.sa1_bwram),
+  sprite_2_tweaker = remap(0x1662, "WRAM", 0x015ea, domains.sa1_bwram),
+  sprite_3_tweaker = remap(0x166e, "WRAM", 0x01600, domains.sa1_bwram),
+  sprite_4_tweaker = remap(0x167a, "WRAM", 0x01616, domains.sa1_bwram),
+  sprite_5_tweaker = remap(0x1686, "WRAM", 0x0162c, domains.sa1_bwram),
+  sprite_6_tweaker = remap(0x190f, "WRAM", 0x01658, domains.sa1_bwram),
+  sprite_tongue_wait = remap(0x14a3, "WRAM", 0x14a3, domains.sa1_bwram),
+  sprite_yoshi_squatting = remap(0x18af, "WRAM", 0x18af, domains.sa1_bwram),
+  sprite_buoyancy = remap(0x190e, "WRAM", 0x190e, domains.sa1_bwram),
+  sprite_load_status_table = remap(0x1938, "WRAM", 0x018a00, domains.sa1_bwram), -- 128 bytes
   sprite_load_status_table_pixi = remap(0x1af00, "WRAM", 0x1af00, ""), -- 128 bytes
-  bowser_attack_timers = remap(0x14b0, "WRAM", 0x14b0, "SA1_BWRAM"), -- 9 bytes
-  yoshi_slot = remap(0x18df, "WRAM", 0x18df, "SA1_BWRAM"),
-  yoshi_loose_flag = remap(0x18e2, "WRAM", 0x18e2, "SA1_BWRAM"),
-  yoshi_overworld_flag = remap(0x0dc1, "WRAM", 0x0dc1, "SA1_BWRAM"),
+  bowser_attack_timers = remap(0x14b0, "WRAM", 0x14b0, domains.sa1_bwram), -- 9 bytes
+  yoshi_slot = remap(0x18df, "WRAM", 0x18df, domains.sa1_bwram),
+  yoshi_loose_flag = remap(0x18e2, "WRAM", 0x18e2, domains.sa1_bwram),
+  yoshi_overworld_flag = remap(0x0dc1, "WRAM", 0x0dc1, domains.sa1_bwram),
   
   -- Misc sprite tables
-  sprite_miscellaneous1 = remap(0x00c2, "WRAM", 0x0d8, "SA1_IRAM"),
-  sprite_miscellaneous2 = remap(0x1504, "WRAM", 0x01f4f, "SA1_BWRAM"),
-  sprite_miscellaneous3 = remap(0x1510, "WRAM", 0x0150a, "SA1_BWRAM"),
-  sprite_miscellaneous4 = remap(0x151c, "WRAM", 0x284, "SA1_IRAM"),
-  sprite_miscellaneous5 = remap(0x1528, "WRAM", 0x029a, "SA1_IRAM"),
-  sprite_miscellaneous6 = remap(0x1534, "WRAM", 0x2b0, "SA1_IRAM"),
-  sprite_miscellaneous7 = remap(0x1540, "WRAM", 0x02c6, "SA1_IRAM"),
-  sprite_miscellaneous8 = remap(0x154c, "WRAM", 0x02dc, "SA1_IRAM"),
-  sprite_miscellaneous9 = remap(0x1558, "WRAM", 0x02f2, "SA1_IRAM"),
-  sprite_miscellaneous10 = remap(0x1564, "WRAM", 0x308, "SA1_IRAM"),
-  sprite_miscellaneous11 = remap(0x1570, "WRAM", 0x31e, "SA1_IRAM"),
-  sprite_miscellaneous12 = remap(0x157c, "WRAM", 0x334, "SA1_IRAM"),
-  sprite_miscellaneous13 = remap(0x1594, "WRAM", 0x360, "SA1_IRAM"),
-  sprite_miscellaneous14 = remap(0x15ac, "WRAM", 0x38c, "SA1_IRAM"),
-  sprite_miscellaneous15 = remap(0x1602, "WRAM", 0x3ce, "SA1_IRAM"),
-  sprite_miscellaneous16 = remap(0x160e, "WRAM", 0x3e4, "SA1_IRAM"),
-  sprite_miscellaneous17 = remap(0x1626, "WRAM", 0x0158e, "SA1_BWRAM"),
-  sprite_miscellaneous18 = remap(0x163e, "WRAM", 0x3fa, "SA1_IRAM"),
-  sprite_miscellaneous19 = remap(0x187b, "WRAM", 0x410, "SA1_IRAM"),
+  sprite_miscellaneous1 = remap(0x00c2, "WRAM", 0x0d8, domains.sa1_iram),
+  sprite_miscellaneous2 = remap(0x1504, "WRAM", 0x01f4f, domains.sa1_bwram),
+  sprite_miscellaneous3 = remap(0x1510, "WRAM", 0x0150a, domains.sa1_bwram),
+  sprite_miscellaneous4 = remap(0x151c, "WRAM", 0x284, domains.sa1_iram),
+  sprite_miscellaneous5 = remap(0x1528, "WRAM", 0x029a, domains.sa1_iram),
+  sprite_miscellaneous6 = remap(0x1534, "WRAM", 0x2b0, domains.sa1_iram),
+  sprite_miscellaneous7 = remap(0x1540, "WRAM", 0x02c6, domains.sa1_iram),
+  sprite_miscellaneous8 = remap(0x154c, "WRAM", 0x02dc, domains.sa1_iram),
+  sprite_miscellaneous9 = remap(0x1558, "WRAM", 0x02f2, domains.sa1_iram),
+  sprite_miscellaneous10 = remap(0x1564, "WRAM", 0x308, domains.sa1_iram),
+  sprite_miscellaneous11 = remap(0x1570, "WRAM", 0x31e, domains.sa1_iram),
+  sprite_miscellaneous12 = remap(0x157c, "WRAM", 0x334, domains.sa1_iram),
+  sprite_miscellaneous13 = remap(0x1594, "WRAM", 0x360, domains.sa1_iram),
+  sprite_miscellaneous14 = remap(0x15ac, "WRAM", 0x38c, domains.sa1_iram),
+  sprite_miscellaneous15 = remap(0x1602, "WRAM", 0x3ce, domains.sa1_iram),
+  sprite_miscellaneous16 = remap(0x160e, "WRAM", 0x3e4, domains.sa1_iram),
+  sprite_miscellaneous17 = remap(0x1626, "WRAM", 0x0158e, domains.sa1_bwram),
+  sprite_miscellaneous18 = remap(0x163e, "WRAM", 0x3fa, domains.sa1_iram),
+  sprite_miscellaneous19 = remap(0x187b, "WRAM", 0x410, domains.sa1_iram),
 
   -- Extended sprites
-  extspr_number = remap(0x170b, "WRAM", 0x170b, "SA1_BWRAM"),
-  extspr_x_high = remap(0x1733, "WRAM", 0x1733, "SA1_BWRAM"),
-  extspr_x_low = remap(0x171f, "WRAM", 0x171f, "SA1_BWRAM"),
-  extspr_y_high = remap(0x1729, "WRAM", 0x1729, "SA1_BWRAM"),
-  extspr_y_low = remap(0x1715, "WRAM", 0x1715, "SA1_BWRAM"),
-  extspr_x_speed = remap(0x1747, "WRAM", 0x1747, "SA1_BWRAM"),
-  extspr_y_speed = remap(0x173d, "WRAM", 0x173d, "SA1_BWRAM"),
-  extspr_suby = remap(0x1751, "WRAM", 0x1751, "SA1_BWRAM"),
-  extspr_subx = remap(0x175b, "WRAM", 0x175b, "SA1_BWRAM"),
-  extspr_table = remap(0x1765, "WRAM", 0x1765, "SA1_BWRAM"),
-  extspr_table2 = remap(0x176f, "WRAM", 0x176f, "SA1_BWRAM"),
+  extspr_number = remap(0x170b, "WRAM", 0x170b, domains.sa1_bwram),
+  extspr_x_high = remap(0x1733, "WRAM", 0x1733, domains.sa1_bwram),
+  extspr_x_low = remap(0x171f, "WRAM", 0x171f, domains.sa1_bwram),
+  extspr_y_high = remap(0x1729, "WRAM", 0x1729, domains.sa1_bwram),
+  extspr_y_low = remap(0x1715, "WRAM", 0x1715, domains.sa1_bwram),
+  extspr_x_speed = remap(0x1747, "WRAM", 0x1747, domains.sa1_bwram),
+  extspr_y_speed = remap(0x173d, "WRAM", 0x173d, domains.sa1_bwram),
+  extspr_suby = remap(0x1751, "WRAM", 0x1751, domains.sa1_bwram),
+  extspr_subx = remap(0x175b, "WRAM", 0x175b, domains.sa1_bwram),
+  extspr_table = remap(0x1765, "WRAM", 0x1765, domains.sa1_bwram),
+  extspr_table2 = remap(0x176f, "WRAM", 0x176f, domains.sa1_bwram),
 
   -- Cluster sprites
-  cluspr_flag = remap(0x18b8, "WRAM", 0x18b8, "SA1_BWRAM"),
-  cluspr_number = remap(0x1892, "WRAM", 0x1892, "SA1_BWRAM"),
-  cluspr_x_high = remap(0x1e3e, "WRAM", 0x1e3e, "SA1_BWRAM"),
-  cluspr_x_low = remap(0x1e16, "WRAM", 0x1e16, "SA1_BWRAM"),
-  cluspr_y_high = remap(0x1e2a, "WRAM", 0x1e2a, "SA1_BWRAM"),
-  cluspr_y_low = remap(0x1e02, "WRAM", 0x1e02, "SA1_BWRAM"),
-  cluspr_timer = remap(0x0f9a, "WRAM", 0x0f9a, "SA1_BWRAM"),
-  cluspr_table_1 = remap(0x0f4a, "WRAM", 0x0f4a, "SA1_BWRAM"),
-  cluspr_table_2 = remap(0x0f72, "WRAM", 0x0f72, "SA1_BWRAM"),
-  cluspr_table_3 = remap(0x0f86, "WRAM", 0x0f86, "SA1_BWRAM"),
-  reappearing_boo_counter = remap(0x190a, "WRAM", 0x190a, "SA1_BWRAM"),
+  cluspr_flag = remap(0x18b8, "WRAM", 0x18b8, domains.sa1_bwram),
+  cluspr_number = remap(0x1892, "WRAM", 0x1892, domains.sa1_bwram),
+  cluspr_x_high = remap(0x1e3e, "WRAM", 0x1e3e, domains.sa1_bwram),
+  cluspr_x_low = remap(0x1e16, "WRAM", 0x1e16, domains.sa1_bwram),
+  cluspr_y_high = remap(0x1e2a, "WRAM", 0x1e2a, domains.sa1_bwram),
+  cluspr_y_low = remap(0x1e02, "WRAM", 0x1e02, domains.sa1_bwram),
+  cluspr_timer = remap(0x0f9a, "WRAM", 0x0f9a, domains.sa1_bwram),
+  cluspr_table_1 = remap(0x0f4a, "WRAM", 0x0f4a, domains.sa1_bwram),
+  cluspr_table_2 = remap(0x0f72, "WRAM", 0x0f72, domains.sa1_bwram),
+  cluspr_table_3 = remap(0x0f86, "WRAM", 0x0f86, domains.sa1_bwram),
+  reappearing_boo_counter = remap(0x190a, "WRAM", 0x190a, domains.sa1_bwram),
 
   -- Minor extended sprites
-  minorspr_number = remap(0x17f0, "WRAM", 0x17f0, "SA1_BWRAM"),
-  minorspr_x_high = remap(0x18ea, "WRAM", 0x18ea, "SA1_BWRAM"),
-  minorspr_x_low = remap(0x1808, "WRAM", 0x1808, "SA1_BWRAM"),
-  minorspr_y_high = remap(0x1814, "WRAM", 0x1814, "SA1_BWRAM"),
-  minorspr_y_low = remap(0x17fc, "WRAM", 0x17fc, "SA1_BWRAM"),
-  minorspr_xspeed = remap(0x182c, "WRAM", 0x182c, "SA1_BWRAM"),
-  minorspr_yspeed = remap(0x1820, "WRAM", 0x1820, "SA1_BWRAM"),
-  minorspr_x_sub = remap(0x1844, "WRAM", 0x1844, "SA1_BWRAM"),
-  minorspr_y_sub = remap(0x1838, "WRAM", 0x1838, "SA1_BWRAM"),
-  minorspr_timer = remap(0x1850, "WRAM", 0x1850, "SA1_BWRAM"),
+  minorspr_number = remap(0x17f0, "WRAM", 0x17f0, domains.sa1_bwram),
+  minorspr_x_high = remap(0x18ea, "WRAM", 0x18ea, domains.sa1_bwram),
+  minorspr_x_low = remap(0x1808, "WRAM", 0x1808, domains.sa1_bwram),
+  minorspr_y_high = remap(0x1814, "WRAM", 0x1814, domains.sa1_bwram),
+  minorspr_y_low = remap(0x17fc, "WRAM", 0x17fc, domains.sa1_bwram),
+  minorspr_xspeed = remap(0x182c, "WRAM", 0x182c, domains.sa1_bwram),
+  minorspr_yspeed = remap(0x1820, "WRAM", 0x1820, domains.sa1_bwram),
+  minorspr_x_sub = remap(0x1844, "WRAM", 0x1844, domains.sa1_bwram),
+  minorspr_y_sub = remap(0x1838, "WRAM", 0x1838, domains.sa1_bwram),
+  minorspr_timer = remap(0x1850, "WRAM", 0x1850, domains.sa1_bwram),
 
   -- Bounce sprites
-  bouncespr_number = remap(0x1699, "WRAM", 0x1699, "SA1_BWRAM"),
-  bouncespr_x_high = remap(0x16ad, "WRAM", 0x16ad, "SA1_BWRAM"),
-  bouncespr_x_low = remap(0x16a5, "WRAM", 0x16a5, "SA1_BWRAM"),
-  bouncespr_y_high = remap(0x16a9, "WRAM", 0x16a9, "SA1_BWRAM"),
-  bouncespr_y_low = remap(0x16a1, "WRAM", 0x16a1, "SA1_BWRAM"),
-  bouncespr_timer = remap(0x16c5, "WRAM", 0x16c5, "SA1_BWRAM"),
-  bouncespr_last_id = remap(0x18cd, "WRAM", 0x18cd, "SA1_BWRAM"),
-  turn_block_timer = remap(0x18ce, "WRAM", 0x18ce, "SA1_BWRAM"),
+  bouncespr_number = remap(0x1699, "WRAM", 0x1699, domains.sa1_bwram),
+  bouncespr_x_high = remap(0x16ad, "WRAM", 0x16ad, domains.sa1_bwram),
+  bouncespr_x_low = remap(0x16a5, "WRAM", 0x16a5, domains.sa1_bwram),
+  bouncespr_y_high = remap(0x16a9, "WRAM", 0x16a9, domains.sa1_bwram),
+  bouncespr_y_low = remap(0x16a1, "WRAM", 0x16a1, domains.sa1_bwram),
+  bouncespr_timer = remap(0x16c5, "WRAM", 0x16c5, domains.sa1_bwram),
+  bouncespr_last_id = remap(0x18cd, "WRAM", 0x18cd, domains.sa1_bwram),
+  turn_block_timer = remap(0x18ce, "WRAM", 0x18ce, domains.sa1_bwram),
 
   -- Quake sprites
-  quakespr_number = remap(0x16cd, "WRAM", 0x16cd, "SA1_BWRAM"),
-  quakespr_x_high = remap(0x16d5, "WRAM", 0x16d5, "SA1_BWRAM"),
-  quakespr_x_low = remap(0x16d1, "WRAM", 0x16d1, "SA1_BWRAM"),
-  quakespr_y_high = remap(0x16dd, "WRAM", 0x16dd, "SA1_BWRAM"),
-  quakespr_y_low = remap(0x16d9, "WRAM", 0x16d9, "SA1_BWRAM"),
-  quakespr_timer = remap(0x18f8, "WRAM", 0x18f8, "SA1_BWRAM"),
+  quakespr_number = remap(0x16cd, "WRAM", 0x16cd, domains.sa1_bwram),
+  quakespr_x_high = remap(0x16d5, "WRAM", 0x16d5, domains.sa1_bwram),
+  quakespr_x_low = remap(0x16d1, "WRAM", 0x16d1, domains.sa1_bwram),
+  quakespr_y_high = remap(0x16dd, "WRAM", 0x16dd, domains.sa1_bwram),
+  quakespr_y_low = remap(0x16d9, "WRAM", 0x16d9, domains.sa1_bwram),
+  quakespr_timer = remap(0x18f8, "WRAM", 0x18f8, domains.sa1_bwram),
 
   -- Timer
   --keep_mode_active = 0x0db1,
-  pipe_entrance_timer = remap(0x0088, "WRAM", 0x0088, "SA1_IRAM"),
-  score_incrementing = remap(0x13d6, "WRAM", 0x13d6, "SA1_BWRAM"),
-  fadeout_radius = remap(0x1433, "WRAM", 0x1433, "SA1_BWRAM"),
-  peace_image_timer = remap(0x1492, "WRAM", 0x1492, "SA1_BWRAM"),
-  end_level_timer = remap(0x1493, "WRAM", 0x1493, "SA1_BWRAM"),
-  multicoin_block_timer = remap(0x186b, "WRAM", 0x186b, "SA1_BWRAM"),
-  gray_pow_timer = remap(0x14ae, "WRAM", 0x14ae, "SA1_BWRAM"),
-  blue_pow_timer = remap(0x14ad, "WRAM", 0x14ad, "SA1_BWRAM"),
-  dircoin_timer = remap(0x190c, "WRAM", 0x190c, "SA1_BWRAM"),
-  pballoon_timer = remap(0x1891, "WRAM", 0x1891, "SA1_BWRAM"),
-  star_timer = remap(0x1490, "WRAM", 0x1490, "SA1_BWRAM"),
-  animation_timer = remap(0x1496, "WRAM", 0x1496, "SA1_BWRAM"),
-  invisibility_timer = remap(0x1497, "WRAM", 0x1497, "SA1_BWRAM"),
-  fireflower_timer = remap(0x149b, "WRAM", 0x149b, "SA1_BWRAM"),
-  yoshi_timer = remap(0x18e8, "WRAM", 0x18e8, "SA1_BWRAM"),
-  swallow_timer = remap(0x18ac, "WRAM", 0x18ac, "SA1_BWRAM"),
-  lakitu_timer = remap(0x18e0, "WRAM", 0x18e0, "SA1_BWRAM"),
-  spinjump_fireball_timer = remap(0x13e2, "WRAM", 0x13e2, "SA1_BWRAM"),
-  game_intro_timer = remap(0x1df5, "WRAM", 0x1df5, "SA1_BWRAM"),
-  pause_timer = remap(0x13d3, "WRAM", 0x13d3, "SA1_BWRAM"),
-  bonus_timer = remap(0x14ab, "WRAM", 0x14ab, "SA1_BWRAM"),
-  disappearing_sprites_timer = remap(0x18bf, "WRAM", 0x18bf, "SA1_BWRAM"),
-  message_box_timer = remap(0x1b89, "WRAM", 0x1b89, "SA1_BWRAM"),
+  pipe_entrance_timer = remap(0x0088, "WRAM", 0x0088, domains.sa1_iram),
+  score_incrementing = remap(0x13d6, "WRAM", 0x13d6, domains.sa1_bwram),
+  fadeout_radius = remap(0x1433, "WRAM", 0x1433, domains.sa1_bwram),
+  peace_image_timer = remap(0x1492, "WRAM", 0x1492, domains.sa1_bwram),
+  end_level_timer = remap(0x1493, "WRAM", 0x1493, domains.sa1_bwram),
+  multicoin_block_timer = remap(0x186b, "WRAM", 0x186b, domains.sa1_bwram),
+  gray_pow_timer = remap(0x14ae, "WRAM", 0x14ae, domains.sa1_bwram),
+  blue_pow_timer = remap(0x14ad, "WRAM", 0x14ad, domains.sa1_bwram),
+  dircoin_timer = remap(0x190c, "WRAM", 0x190c, domains.sa1_bwram),
+  pballoon_timer = remap(0x1891, "WRAM", 0x1891, domains.sa1_bwram),
+  star_timer = remap(0x1490, "WRAM", 0x1490, domains.sa1_bwram),
+  animation_timer = remap(0x1496, "WRAM", 0x1496, domains.sa1_bwram),
+  invisibility_timer = remap(0x1497, "WRAM", 0x1497, domains.sa1_bwram),
+  fireflower_timer = remap(0x149b, "WRAM", 0x149b, domains.sa1_bwram),
+  yoshi_timer = remap(0x18e8, "WRAM", 0x18e8, domains.sa1_bwram),
+  swallow_timer = remap(0x18ac, "WRAM", 0x18ac, domains.sa1_bwram),
+  lakitu_timer = remap(0x18e0, "WRAM", 0x18e0, domains.sa1_bwram),
+  spinjump_fireball_timer = remap(0x13e2, "WRAM", 0x13e2, domains.sa1_bwram),
+  game_intro_timer = remap(0x1df5, "WRAM", 0x1df5, domains.sa1_bwram),
+  pause_timer = remap(0x13d3, "WRAM", 0x13d3, domains.sa1_bwram),
+  bonus_timer = remap(0x14ab, "WRAM", 0x14ab, domains.sa1_bwram),
+  disappearing_sprites_timer = remap(0x18bf, "WRAM", 0x18bf, domains.sa1_bwram),
+  message_box_timer = remap(0x1b89, "WRAM", 0x1b89, domains.sa1_bwram),
 
   -- Cheats
-  frozen = remap(0x13fb, "WRAM", 0x13fb, "SA1_BWRAM"),
-  level_paused = remap(0x13d4, "WRAM", 0x13d4, "SA1_BWRAM"),
-  translevel_index = remap(0x13bf, "WRAM", 0x13bf, "SA1_BWRAM"),
-  level_flag_table = remap(0x1ea2, "WRAM", 0x1ea2, "SA1_BWRAM"),
-  level_exit_type = remap(0x0dd5, "WRAM", 0x0dd5, "SA1_BWRAM"),
-  midway_point = remap(0x13ce, "WRAM", 0x13ce, "SA1_BWRAM"),
+  frozen = remap(0x13fb, "WRAM", 0x13fb, domains.sa1_bwram),
+  level_paused = remap(0x13d4, "WRAM", 0x13d4, domains.sa1_bwram),
+  translevel_index = remap(0x13bf, "WRAM", 0x13bf, domains.sa1_bwram),
+  level_flag_table = remap(0x1ea2, "WRAM", 0x1ea2, domains.sa1_bwram),
+  level_exit_type = remap(0x0dd5, "WRAM", 0x0dd5, domains.sa1_bwram),
+  midway_point = remap(0x13ce, "WRAM", 0x13ce, domains.sa1_bwram),
 
   -- Layers
-  layer2_x_nextframe = remap(0x1466, "WRAM", 0x1466, "SA1_BWRAM"),
-  layer2_y_nextframe = remap(0x1468, "WRAM", 0x1468, "SA1_BWRAM"),
+  layer2_x_nextframe = remap(0x1466, "WRAM", 0x1466, domains.sa1_bwram),
+  layer2_y_nextframe = remap(0x1468, "WRAM", 0x1468, domains.sa1_bwram),
 
   -- map16 tiles in the current room
-  map16_low = remap(0x00c800, "WRAM", 0x00c800, "SA1_BWRAM"),
-  map16_high = remap(0x01c800, "WRAM", 0x01c800, "SA1_BWRAM"),
+  map16_low = remap(0x00c800, "WRAM", 0x00c800, domains.sa1_bwram),
+  map16_high = remap(0x01c800, "WRAM", 0x01c800, domains.sa1_bwram),
 }
 
 local ROM = {
