@@ -4579,11 +4579,11 @@ special_sprite_property[0x1e] = function(slot) -- Lakitu
     local yoff = mem(u8, remap(0x305, "WRAM"), OAM_index) - 0x0c
     local width, height = 0x18 - 1, 0x18 - 1  -- instruction BCS
 
-    print(xoff, yoff, width, height, COLOUR.awkward_hitbox, COLOUR.awkward_hitbox_bg)
+    -- print(xoff, yoff, width, height, COLOUR.awkward_hitbox, COLOUR.awkward_hitbox_bg)
     draw.rectangle(xoff, yoff, width, height, COLOUR.awkward_hitbox, COLOUR.awkward_hitbox_bg)
     -- TODO: 0x7e and 0x80 are too important
     -- draw this point outside this function and add an option
-    draw.pixel(mem(s16, 0x7e), mem(s16, 0x80), COLOUR.mario)
+    draw.pixel(mem(s16, remap(0x7e, "WRAM")), mem(s16, remap(0x80, "WRAM")), COLOUR.mario)
   end
 end
 
@@ -4803,7 +4803,7 @@ special_sprite_property[0x86] = function(slot) -- Wiggler (segments)
     OAM_index = OAM_index + 4
   end
 
-  draw.pixel(mem(s16, 0x7e), mem(s16, 0x80), COLOUR.mario, 0x80000000)
+  draw.pixel(mem(s16, remap(0x7e, "WRAM")), mem(s16, remap(0x80, "WRAM")), COLOUR.mario, 0x80000000)
 end
 
 special_sprite_property[0xa9] = function(slot) -- Reznor
@@ -5223,6 +5223,9 @@ local function yoshi()
       special_sprite_property.yoshi_tongue_time_predictor(tongue_len, tongue_timer, tongue_wait, tongue_out, eat_id)
       draw.text(draw.AR_x*(x_screen + xoff + 4), draw.AR_y*(y_screen + yoff + 5), info, color, false, false, 0.5)
     end
+  end
+  if mem(u8, WRAM.yoshi_overworld_flag) ~= 0 then
+    draw.text(x_text, y_text - draw.BIZHAWK_FONT_HEIGHT, fmt("Next room"), COLOUR.yoshi) 
   end
 end
 
@@ -6723,10 +6726,55 @@ function Sprite_tables_form.create_window()
   
   -- Evaluate which sprite tables should be displayed
   Sprite_tables_form.tables = {
-    0x009E, 0x00AA, 0x00B6, 0x00C2, 0x00D8, 0x00E4, 0x14C8, 0x14D4, 0x14E0, 0x14EC, 0x14F8, 0x1504, 0x1510, 0x151C,
-    0x1528, 0x1534, 0x1540, 0x154C, 0x1558, 0x1564, 0x1570, 0x157C, 0x1588, 0x1594, 0x15A0, 0x15AC, 0x15B8, 0x15C4,
-    0x15D0, 0x15DC, 0x15EA, 0x15F6, 0x1602, 0x160E, 0x161A, 0x1626, 0x1632, 0x163E, 0x164A, 0x1656, 0x1662, 0x166E,
-    0x167A, 0x1686, 0x186C, 0x187B, 0x190F, 0x1FD6, 0x1FE2
+    remap(0x009E, "WRAM", 0x009E, ""),
+    remap(0x00AA, "WRAM", 0x00AA, ""), 
+    remap(0x00B6, "WRAM", 0x00B6, ""), 
+    remap(0x00C2, "WRAM", 0x00C2, ""), 
+    remap(0x00D8, "WRAM", 0x00D8, ""), 
+    remap(0x00E4, "WRAM", 0x00E4, ""), 
+    remap(0x14C8, "WRAM", 0x14C8, ""), 
+    remap(0x14D4, "WRAM", 0x14D4, ""), 
+    remap(0x14E0, "WRAM", 0x14E0, ""), 
+    remap(0x14EC, "WRAM", 0x14EC, ""), 
+    remap(0x14F8, "WRAM", 0x14F8, ""), 
+    remap(0x1504, "WRAM", 0x1504, ""), 
+    remap(0x1510, "WRAM", 0x1510, ""), 
+    remap(0x151C, "WRAM", 0x151C, ""), 
+    remap(0x1528, "WRAM", 0x1528, ""), 
+    remap(0x1534, "WRAM", 0x1534, ""), 
+    remap(0x1540, "WRAM", 0x1540, ""), 
+    remap(0x154C, "WRAM", 0x154C, ""), 
+    remap(0x1558, "WRAM", 0x1558, ""), 
+    remap(0x1564, "WRAM", 0x1564, ""), 
+    remap(0x1570, "WRAM", 0x1570, ""), 
+    remap(0x157C, "WRAM", 0x157C, ""), 
+    remap(0x1588, "WRAM", 0x1588, ""), 
+    remap(0x1594, "WRAM", 0x1594, ""), 
+    remap(0x15A0, "WRAM", 0x15A0, ""), 
+    remap(0x15AC, "WRAM", 0x15AC, ""), 
+    remap(0x15B8, "WRAM", 0x15B8, ""), 
+    remap(0x15C4, "WRAM", 0x15C4, ""), 
+    remap(0x15D0, "WRAM", 0x15D0, ""), 
+    remap(0x15DC, "WRAM", 0x15DC, ""), 
+    remap(0x15EA, "WRAM", 0x15EA, ""), 
+    remap(0x15F6, "WRAM", 0x15F6, ""), 
+    remap(0x1602, "WRAM", 0x1602, ""), 
+    remap(0x160E, "WRAM", 0x160E, ""), 
+    remap(0x161A, "WRAM", 0x161A, ""), 
+    remap(0x1626, "WRAM", 0x1626, ""), 
+    remap(0x1632, "WRAM", 0x1632, ""), 
+    remap(0x163E, "WRAM", 0x163E, ""), 
+    remap(0x164A, "WRAM", 0x164A, ""), 
+    remap(0x1656, "WRAM", 0x1656, ""), 
+    remap(0x1662, "WRAM", 0x1662, ""), 
+    remap(0x166E, "WRAM", 0x166E, ""), 
+    remap(0x167A, "WRAM", 0x167A, ""), 
+    remap(0x1686, "WRAM", 0x1686, ""), 
+    remap(0x186C, "WRAM", 0x186C, ""), 
+    remap(0x187B, "WRAM", 0x187B, ""), 
+    remap(0x190F, "WRAM", 0x190F, ""), 
+    remap(0x1FD6, "WRAM", 0x1FD6, ""), 
+    remap(0x1FE2, "WRAM", 0x1FE2, "")
   }
   Sprite_tables_form.display = {}
   Sprite_tables_form.display_count = 0
@@ -6760,7 +6808,7 @@ function Sprite_tables_form.create_window()
     for j = 1, #Sprite_tables_form.display do -- j = sprite table to be displayed index
     
       if i == 1 then -- to print this once per sprite table, could be any i
-        forms.label(Sprite_tables_form.form, fmt("%04X", Sprite_tables_form.display[j]), xform - 6 + j*30, yform - 2*delta_y, 34, delta_y)
+        forms.label(Sprite_tables_form.form, fmt("%04X", Sprite_tables_form.display[j].address), xform - 6 + j*30, yform - 2*delta_y, 34, delta_y)
       end
       Sprite_tables_form.values[i][j] = forms.label(Sprite_tables_form.form, fmt("%02X", mem(u8, Sprite_tables_form.display[j], i)), xform + j*30, yform, 22, delta_y)
       forms.setproperty(Sprite_tables_form.values[i][j], "ForeColor", Sprite_tables_form.colour_same) -- set pure black colour to be used later at Sprite_tables_form.evaluate_form()
@@ -6785,8 +6833,8 @@ function Sprite_tables_form.create_window()
     forms.setproperty(Sprite_tables_form.display_checkbox[i], "Checked", OPTIONS.display_misc_sprite_table[i])
     forms.setproperty(Sprite_tables_form.display_checkbox[i], "Width", 14)
     
-    forms.button(Sprite_tables_form.form, fmt("$%04X", Sprite_tables_form.tables[i]), function ()
-      forms.settext(Sprite_tables_form.description, fmt("$7E%04X: \n %s", Sprite_tables_form.tables[i], SMW.sprite_table_descr[Sprite_tables_form.tables[i]])) end, xform + 16, yform + 2, 48, 19)
+    forms.button(Sprite_tables_form.form, fmt("$%04X", Sprite_tables_form.tables[i].address), function ()
+      forms.settext(Sprite_tables_form.description, fmt("$7E%04X: \n %s", Sprite_tables_form.tables[i].address, SMW.sprite_table_descr[Sprite_tables_form.tables[i].address])) end, xform + 16, yform + 2, 48, 19)
     
     xform = xform + 70
     if i%7 == 0 then yform = yform + delta_y ; xform = 4 end
