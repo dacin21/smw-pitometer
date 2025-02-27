@@ -17,7 +17,7 @@
 --#######################################################################
 
 -- bit functions that got removed in bizhawk 2.9
-if not bit.band then
+if _VERSION == "Lua 5.4" then
     bit = (require "migration_helpers").EmuHawk_pre_2_9_bit();
 end
 
