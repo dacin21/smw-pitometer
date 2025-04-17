@@ -52,6 +52,7 @@ config.DEFAULT_OPTIONS = {
   display_debug_sprite_tweakers = false,
   display_debug_sprite_extra = false,
   use_pixi_status_table = false,
+  display_oam_table = false,
   display_other_sprites_info = true,
   display_extended_sprite_info = true,
   display_extended_sprite_hitbox = true,
@@ -524,16 +525,16 @@ local OBJDEF = {
 local default_pretty_indent  = "  "
 local default_pretty_options = { pretty = true, align_keys = false, indent = default_pretty_indent }
 
-local isArray  = { __tostring = function() return "JSON array"  end }   isArray.__index  = isArray
-local isObject = { __tostring = function() return "JSON object" end }   isObject.__index = isObject
+OBJDEF.isArray  = { __tostring = function() return "JSON array"  end }   OBJDEF.isArray.__index  = OBJDEF.isArray
+OBJDEF.isObject = { __tostring = function() return "JSON object" end }   OBJDEF.isObject.__index = OBJDEF.isObject
 
 
 function OBJDEF:newArray(tbl)
-  return setmetatable(tbl or {}, isArray)
+  return setmetatable(tbl or {}, OBJDEF.isArray)
 end
 
 function OBJDEF:newObject(tbl)
-  return setmetatable(tbl or {}, isObject)
+  return setmetatable(tbl or {}, OBJDEF.isObject)
 end
 
 local function unicode_codepoint_as_utf8(codepoint)
@@ -634,7 +635,7 @@ function OBJDEF:onEncodeError(message, etc)
   end
 end
 
-local function grok_number(self, text, start, etc)
+function OBJDEF.grok_number(self, text, start, etc)
   --
   -- Grab the integer part
   --
@@ -672,7 +673,7 @@ local function grok_number(self, text, start, etc)
 end
 
 
-local function grok_string(self, text, start, etc)
+function OBJDEF.grok_string(self, text, start, etc)
 
   if text:sub(start,start) ~= '"' then
     self:onDecodeError("expected string's opening quote", text, start, etc)
@@ -736,7 +737,7 @@ local function grok_string(self, text, start, etc)
   self:onDecodeError("unclosed string", text, start, etc)
 end
 
-local function skip_whitespace(text, start)
+function OBJDEF.skip_whitespace(text, start)
 
   local _, match_end = text:find("^[ \n\r\t]+", start) -- [http://www.ietf.org/rfc/rfc4627.txt] Section 2
   if match_end then
@@ -746,14 +747,14 @@ local function skip_whitespace(text, start)
   end
 end
 
-local grok_one -- assigned later
+OBJDEF.grok_one = nil -- assigned later
 
-local function grok_object(self, text, start, etc)
+function OBJDEF.grok_object(self, text, start, etc)
   if text:sub(start,start) ~= '{' then
     self:onDecodeError("expected '{'", text, start, etc)
   end
 
-  local i = skip_whitespace(text, start + 1) -- +1 to skip the '{'
+  local i = OBJDEF.skip_whitespace(text, start + 1) -- +1 to skip the '{'
 
   local VALUE = self.strictTypes and self:newObject { } or { }
 
@@ -762,24 +763,24 @@ local function grok_object(self, text, start, etc)
   end
   local text_len = text:len()
   while i <= text_len do
-    local key, new_i = grok_string(self, text, i, etc)
+    local key, new_i = OBJDEF.grok_string(self, text, i, etc)
 
-    i = skip_whitespace(text, new_i)
+    i = OBJDEF.skip_whitespace(text, new_i)
 
     if text:sub(i, i) ~= ':' then
      self:onDecodeError("expected colon", text, i, etc)
     end
 
-    i = skip_whitespace(text, i + 1)
+    i = OBJDEF.skip_whitespace(text, i + 1)
 
-    local new_val, new_i = grok_one(self, text, i)
+    local new_val, new_i = OBJDEF.grok_one(self, text, i)
 
     VALUE[key] = new_val
 
     --
     -- Expect now either '}' to end things, or a ',' to allow us to continue.
     --
-    i = skip_whitespace(text, new_i)
+    i = OBJDEF.skip_whitespace(text, new_i)
 
     local c = text:sub(i,i)
 
@@ -791,18 +792,18 @@ local function grok_object(self, text, start, etc)
      self:onDecodeError("expected comma or '}'", text, i, etc)
     end
 
-    i = skip_whitespace(text, i + 1)
+    i = OBJDEF.skip_whitespace(text, i + 1)
   end
 
   self:onDecodeError("unclosed '{'", text, start, etc)
 end
 
-local function grok_array(self, text, start, etc)
+function OBJDEF.grok_array(self, text, start, etc)
   if text:sub(start,start) ~= '[' then
     self:onDecodeError("expected '['", text, start, etc)
   end
 
-  local i = skip_whitespace(text, start + 1) -- +1 to skip the '['
+  local i = OBJDEF.skip_whitespace(text, start + 1) -- +1 to skip the '['
   local VALUE = self.strictTypes and self:newArray { } or { }
   if text:sub(i,i) == ']' then
     return VALUE, i + 1
@@ -812,13 +813,13 @@ local function grok_array(self, text, start, etc)
 
   local text_len = text:len()
   while i <= text_len do
-    local val, new_i = grok_one(self, text, i)
+    local val, new_i = OBJDEF.grok_one(self, text, i)
 
     -- can't table.insert(VALUE, val) here because it's a no-op if val is nil
     VALUE[VALUE_INDEX] = val
     VALUE_INDEX = VALUE_INDEX + 1
 
-    i = skip_whitespace(text, new_i)
+    i = OBJDEF.skip_whitespace(text, new_i)
 
     --
     -- Expect now either ']' to end things, or a ',' to allow us to continue.
@@ -830,31 +831,31 @@ local function grok_array(self, text, start, etc)
     if text:sub(i, i) ~= ',' then
      self:onDecodeError("expected comma or '['", text, i, etc)
     end
-    i = skip_whitespace(text, i + 1)
+    i = OBJDEF.skip_whitespace(text, i + 1)
   end
   self:onDecodeError("unclosed '['", text, start, etc)
 end
 
 
-grok_one = function(self, text, start, etc)
+OBJDEF.grok_one = function(self, text, start, etc)
   -- Skip any whitespace
-  start = skip_whitespace(text, start)
+  start = OBJDEF.skip_whitespace(text, start)
 
   if start > text:len() then
     self:onDecodeError("unexpected end of string", text, nil, etc)
   end
 
   if text:find('^"', start) then
-    return grok_string(self, text, start, etc)
+    return OBJDEF.grok_string(self, text, start, etc)
 
   elseif text:find('^[-0123456789 ]', start) then
-    return grok_number(self, text, start, etc)
+    return OBJDEF.grok_number(self, text, start, etc)
 
   elseif text:find('^%{', start) then
-    return grok_object(self, text, start, etc)
+    return OBJDEF.grok_object(self, text, start, etc)
 
   elseif text:find('^%[', start) then
-    return grok_array(self, text, start, etc)
+    return OBJDEF.grok_array(self, text, start, etc)
 
   elseif text:find('^true', start) then
     return true, start + 4
@@ -899,7 +900,7 @@ function OBJDEF:decode(text, etc)
     self:onDecodeError("JSON package groks only UTF-8, sorry", text, nil, etc)
   end
 
-  local success, value = pcall(grok_one, self, text, 1, etc)
+  local success, value = pcall(OBJDEF.grok_one, self, text, 1, etc)
 
   if success then
     return value
@@ -915,7 +916,7 @@ function OBJDEF:decode(text, etc)
   end
 end
 
-local function backslash_replacement_function(c)
+function OBJDEF.backslash_replacement_function(c)
   if c == "\n" then
     return "\\n"
   elseif c == "\r" then
@@ -935,7 +936,7 @@ local function backslash_replacement_function(c)
   end
 end
 
-local chars_to_be_escaped_in_JSON_string
+OBJDEF.chars_to_be_escaped_in_JSON_string
   = '['
   ..   '"'   -- class sub-pattern to match a double quote
   ..   '%\\'  -- class sub-pattern to match a backslash
@@ -943,8 +944,8 @@ local chars_to_be_escaped_in_JSON_string
   ..   '\001' .. '-' .. '\031' -- class sub-pattern to match control characters
   .. ']'
 
-local function json_string_literal(value)
-  local newval = value:gsub(chars_to_be_escaped_in_JSON_string, backslash_replacement_function)
+function OBJDEF.json_string_literal(value)
+  local newval = value:gsub(OBJDEF.chars_to_be_escaped_in_JSON_string, OBJDEF.backslash_replacement_function)
   return '"' .. newval .. '"'
 end
 
@@ -1047,7 +1048,7 @@ function encode_value(self, value, parents, etc, options, indent)
     return 'null'
 
   elseif type(value) == 'string' then
-    return json_string_literal(value)
+    return OBJDEF.json_string_literal(value)
 
   elseif type(value) == 'number' then
     if value ~= value then
@@ -5060,7 +5061,7 @@ local function sprite_info(id, counter, table_position)
   -- Miscellaneous sprite table -- TODO
   if OPTIONS.display_misc_sprite_table then
     local t = OPTIONS.miscellaneous_sprite_table_number
-    local text = "Tab"
+    local text = "Tabaaa"
     for num = 1, 19 do
       text = fmt("%s %3d", text, num) or text
     end
@@ -5104,6 +5105,10 @@ local function sprites()
                                     SMW.sprite_memory_max[smh] or 0, swap_slot), COLOUR.weak, true)
 end
 
+local function oam_table()
+  if not OPTIONS.display_oam_table then return end
+
+end
 
 special_sprite_property.yoshi_tongue_offset = function(xoff, tongue_length)
   if (xoff % 0x100) < 0x80 then
@@ -5362,6 +5367,8 @@ local function level_mode()
     level_info()
 
     sprites()
+    
+    oam_table()
     
     draw_sprite_spawn_despawn()
 
@@ -6245,6 +6252,11 @@ function Options_form.create_window()
   forms.setproperty(Options_form.debug_sprite_status_pixi, "Checked", OPTIONS.use_pixi_status_table)
   forms.setproperty(Options_form.debug_sprite_status_pixi, "Enabled", OPTIONS.display_sprite_info)
   
+  yform = yform + delta_y
+  Options_form.debug_oam_table = forms.checkbox(Options_form.form, "Oam table", xform, yform)
+  forms.setproperty(Options_form.debug_oam_table, "Checked", OPTIONS.display_oam_table)
+  forms.setproperty(Options_form.debug_oam_table, "Enabled", OPTIONS.display_sprite_info)
+  
   forms.addclick(Options_form.sprite_info, function() -- to enable/disable child options on click
     OPTIONS.display_sprite_info = forms.ischecked(Options_form.sprite_info) or false
     
@@ -6257,6 +6269,7 @@ function Options_form.create_window()
     forms.setproperty(Options_form.debug_sprite_tweakers, "Enabled", OPTIONS.display_sprite_info)
     forms.setproperty(Options_form.debug_sprite_extra, "Enabled", OPTIONS.display_sprite_info)
     forms.setproperty(Options_form.debug_sprite_status_pixi, "Enabled", OPTIONS.display_sprite_info)
+    forms.setproperty(Options_form.debug_oam_table, "Enabled", OPTIONS.display_sprite_info)
   end)
   
   if yform > y_bigger then y_bigger = yform end
@@ -6925,6 +6938,7 @@ function Options_form.evaluate_form() -- TODO: ORGANIZE after all the menu chang
   OPTIONS.display_debug_player_extra = forms.ischecked(Options_form.debug_player_extra) or false
   OPTIONS.display_debug_sprite_extra = forms.ischecked(Options_form.debug_sprite_extra) or false
   OPTIONS.use_pixi_status_table = forms.ischecked(Options_form.debug_sprite_status_pixi) or false
+  OPTIONS.display_oam_table = forms.ischecked(Options_form.debug_oam_table) or false
   OPTIONS.display_debug_sprite_tweakers = forms.ischecked(Options_form.debug_sprite_tweakers) or false
   OPTIONS.display_debug_extended_sprite = forms.ischecked(Options_form.debug_extended_sprite) or false
   OPTIONS.display_debug_cluster_sprite = forms.ischecked(Options_form.debug_cluster_sprite) or false
