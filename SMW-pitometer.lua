@@ -5061,7 +5061,7 @@ local function sprite_info(id, counter, table_position)
   -- Miscellaneous sprite table -- TODO
   if OPTIONS.display_misc_sprite_table then
     local t = OPTIONS.miscellaneous_sprite_table_number
-    local text = "Tabaaa"
+    local text = "Tab"
     for num = 1, 19 do
       text = fmt("%s %3d", text, num) or text
     end
@@ -5107,7 +5107,39 @@ end
 
 local function oam_table()
   if not OPTIONS.display_oam_table then return end
+  -- draw table header
+  local text = "Oam  "
+  for num = 0, 15 do
+    text = fmt("%s %5X", text, num) or text
+  end
+  
+  local first_row_y = draw.AR_y*60
+  local first_x = - draw.Border_left + 18 * draw.BIZHAWK_FONT_WIDTH
 
+  draw.text(first_x, first_row_y - draw.BIZHAWK_FONT_HEIGHT, text, COLOUR.weak)
+  
+  local oam_value = remap(0x0300, "WRAM", 0x0300, "")
+  
+  for row = 0, 15 do
+    text = fmt("%03x  ", 0x0300 + 0x10 * row) or ""
+    for offset = 0, 15 do
+      text = fmt("%s    %02X", text, mem(u8, oam_value, offset + 0x10 * row))
+    end
+    draw.text(first_x, first_row_y + (row) * draw.BIZHAWK_FONT_HEIGHT, text, COLOUR.text)
+  end
+  
+  local sprite_oam_index = remap(0x15EA, "WRAM", 0x15EA, "")
+  
+  for slot = 0, 11 do
+    if mem(u8, WRAM.sprite_status, slot) ~= 0 then
+      local index = mem(u8, sprite_oam_index, slot)
+      local row = math.floor(index / 0x10)
+      local column = 6 * (1 + (index % 0x10))
+      text = fmt(" %02d", slot) or ""
+      
+      draw.text(first_x + column * draw.BIZHAWK_FONT_WIDTH, first_row_y + (row) * draw.BIZHAWK_FONT_HEIGHT, text, COLOUR.sprites[slot%(#COLOUR.sprites) + 1])
+    end
+  end
 end
 
 special_sprite_property.yoshi_tongue_offset = function(xoff, tongue_length)
@@ -5181,7 +5213,7 @@ local function yoshi()
     draw.text(x_text, y_text, fmt("Yoshi %s %d", direction_symbol, turn_around), COLOUR.yoshi)
     local h = draw.BIZHAWK_FONT_HEIGHT
 
-    draw.text(x_text, y_text + h, fmt("(%0s, %0s) %02X, %d, %d",
+    draw.text(x_text, y_text + h, fmt("(%1s, %1s) %02X, %d, %d",
               eat_id_str, eat_type_str, tongue_len, tongue_wait, tongue_timer), COLOUR.yoshi)
     ;
 
