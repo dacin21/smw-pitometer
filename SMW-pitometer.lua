@@ -49,6 +49,7 @@ config.DEFAULT_OPTIONS = {
   display_sprite_main_table = true,
   display_sprite_hitbox = true,
   display_sprite_vs_sprite_hitbox = false,
+  display_inline_misc_sprite_table = true,
   display_debug_sprite_tweakers = false,
   display_debug_sprite_extra = false,
   use_pixi_status_table = false,
@@ -165,7 +166,7 @@ config.DEFAULT_COLOUR = {
     0xffFFFF80, -- yellow
     0xff40FF40  -- green
   },]]
-  sprites = {"#00ff00ff", "#0000ffff", "#ffff00ff", "#ff00ffff", "#b00040ff"},
+  sprites = {"#00ff00ff", "#2255ffff", "#ffff00ff", "#ff00ffff", "#ff6090ff"},
   sprites_interaction_pts = "#ffffffff",
   sprites_bg = "#0000b070",
   sprites_clipping_bg = "#000000a0",
@@ -5016,7 +5017,7 @@ local function sprite_info(id, counter, table_position)
   draw.Bg_opacity = 1.0
 
   if x_offscreen ~= 0 or y_offscreen ~= 0 then
-    draw.Text_opacity = 0.6
+    draw.Text_opacity = 0.75
   end
 
   local contact_str = contact_mario == 0 and "" or " " .. contact_mario
@@ -5059,9 +5060,18 @@ local function sprite_info(id, counter, table_position)
   end
   
   -- Miscellaneous sprite table -- TODO
-  if OPTIONS.display_misc_sprite_table then
+  if OPTIONS.display_inline_misc_sprite_table then
     local t = OPTIONS.miscellaneous_sprite_table_number
-    local text = "Tab"
+    local text = "Name"
+    -- phase pointer, tongue length, spit cooldown, facing direction, tongue phase, tongue timer, mouth slot, iframes
+    local names = {"PP", "", "", "TL", "", "", "", "", "SC", "", "", "PD", "TP", "TT", "", "MS", "", "IF", ""}
+    for _, name in ipairs(names) do
+      text = fmt("%s%3s ", text, name) or text
+    end
+
+    draw.text(- draw.Border_left, draw.AR_y*144 - 2*draw.BIZHAWK_FONT_HEIGHT, text, COLOUR.weak)
+
+    text = "Tab"
     for num = 1, 19 do
       text = fmt("%s %3d", text, num) or text
     end
@@ -6249,13 +6259,18 @@ function Options_form.create_window()
   forms.setproperty(Options_form.sprite_hitbox, "Checked", OPTIONS.display_sprite_hitbox)
   forms.setproperty(Options_form.sprite_hitbox, "Enabled", OPTIONS.display_sprite_info)
   
-  yform = yform + 1.2*delta_y
+  yform = yform + delta_y
   Options_form.sprite_vs_sprite_hitbox = forms.checkbox(Options_form.form, "Sprite vs sprite\nhitbox", xform, yform)
   forms.setproperty(Options_form.sprite_vs_sprite_hitbox, "Checked", OPTIONS.display_sprite_vs_sprite_hitbox)
   forms.setproperty(Options_form.sprite_vs_sprite_hitbox, "Enabled", OPTIONS.display_sprite_info)
   forms.setproperty(Options_form.sprite_vs_sprite_hitbox, "AutoSize", true)
   
   yform = yform + 1.4*delta_y
+  Options_form.inline_misc_sprite_table = forms.checkbox(Options_form.form, "Misc table", xform, yform)
+  forms.setproperty(Options_form.inline_misc_sprite_table, "Checked", OPTIONS.display_inline_misc_sprite_table)
+  forms.setproperty(Options_form.inline_misc_sprite_table, "Enabled", OPTIONS.display_sprite_info)
+
+  yform = yform + delta_y
   Options_form.sprite_spawning_areas = forms.checkbox(Options_form.form, "Spawning areas", xform, yform)
   forms.setproperty(Options_form.sprite_spawning_areas, "Checked", OPTIONS.display_sprite_spawning_areas)
   forms.setproperty(Options_form.sprite_spawning_areas, "Enabled", OPTIONS.display_sprite_info)
@@ -6946,7 +6961,7 @@ function Options_form.evaluate_form() -- TODO: ORGANIZE after all the menu chang
   OPTIONS.display_sprite_main_table = forms.ischecked(Options_form.sprite_main_table) or false
   OPTIONS.display_sprite_hitbox = forms.ischecked(Options_form.sprite_hitbox) or false
   OPTIONS.display_sprite_vs_sprite_hitbox = forms.ischecked(Options_form.sprite_vs_sprite_hitbox) or false
-  --OPTIONS.display_misc_sprite_table =  forms.ischecked(Options_form.sprite_tables) or false
+  OPTIONS.display_inline_misc_sprite_table = forms.ischecked(Options_form.inline_misc_sprite_table) or false
   OPTIONS.display_sprite_data =  forms.ischecked(Options_form.sprite_data) or false
   OPTIONS.display_sprite_load_status =  forms.ischecked(Options_form.sprite_load_status) or false
   OPTIONS.display_sprite_spawning_areas = forms.ischecked(Options_form.sprite_spawning_areas) or false
