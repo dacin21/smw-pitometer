@@ -2100,6 +2100,9 @@ local ROM = {
   -- initalized by rom search
   map16_act_as = nil, 
   slope_height = rom_pointer(0x00e632),
+  -- used to deduce the room number
+  level_sprite_data_pointer = rom_pointer(0x05EC00),
+  level_sprite_data_pointer_bank = rom_pointer(0x0EF100),
 
   -- used for off screen tongue
   level_mode_table = remap(0x3E28, ROM_domain, 0x3E28, ROM_domain),
@@ -2696,9 +2699,9 @@ local function scan_smw()
   LM_translevel_number = Translevel_index
   if Translevel_index > 0x24 then LM_translevel_number = Translevel_index + 0xDC end
   Sprite_data_pointer = mem(u24, WRAM.sprite_data_pointer)
-  for i = 1, 512 do
-    if Sprite_data_pointer == SMW.sprite_data_pointers[i] then
-      Level_index = i - 1
+  for i = 0, 511 do
+    if Sprite_data_pointer == mem(u8, ROM.level_sprite_data_pointer_bank, i) * 0x10000 + mem(u16, ROM.level_sprite_data_pointer, 2*i) then
+      Level_index = i
       break
     end
   end
@@ -3481,7 +3484,7 @@ local function level_info()
   -- Level main info
   if OPTIONS.display_level_main_info then
     -- Level indexes and type
-    draw.text(x_pos, y_pos, fmt("Room(%03X) OWLevel(%03X) %.1s", LM_translevel_number, Level_index, level_type), COLOUR.text, true)
+    draw.text(x_pos, y_pos, fmt("Room(%03X) OWLevel(%03X) %.1s", Level_index, LM_translevel_number, level_type), COLOUR.text, true)
     y_pos = y_pos + draw.BIZHAWK_FONT_HEIGHT
     
     -- Number of screens within the level
