@@ -5492,7 +5492,7 @@ local function overworld_mode()
     
     local triggered_str = ""
     for i = 0, 7 do
-      if bit.test(event_flags, i) then
+      if bit.test(event_flags, 7-i) then
         triggered_str = triggered_str .. fmt("%02X ", 8*byte_off + i)
       else
         triggered_str = triggered_str .. "   "
